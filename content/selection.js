@@ -15,6 +15,7 @@
     let currentSelectionText = '';
     let selectionChangeTimer = null;
     let popoverAutoCloseTimer = null;
+    let lastPointerAnchor = null;
 
     function ensureUi() {
       if (!chipEl) {
@@ -74,6 +75,75 @@
       return Math.max(min, Math.min(max, value));
     }
 
+    function normalizeRect(rect) {
+      if (!rect) {
+        return null;
+      }
+
+      const left = Number(rect.left);
+      const top = Number(rect.top);
+      const width = Number(rect.width);
+      const height = Number(rect.height);
+      const right = Number(rect.right);
+      const bottom = Number(rect.bottom);
+
+      if (![left, top, width, height, right, bottom].every(Number.isFinite)) {
+        return null;
+      }
+
+      return {
+        left,
+        top,
+        width,
+        height,
+        right,
+        bottom
+      };
+    }
+
+    function getRectCenter(rect) {
+      return {
+        x: rect.left + (rect.width / 2),
+        y: rect.top + (rect.height / 2)
+      };
+    }
+
+    function pickBestClientRect(rectList, anchor) {
+      const rects = Array.from(rectList || [])
+        .map((rect) => normalizeRect(rect))
+        .filter((rect) => rect && (rect.width > 1 || rect.height > 1));
+
+      if (rects.length === 0) {
+        return null;
+      }
+
+      if (!anchor || !Number.isFinite(anchor.x) || !Number.isFinite(anchor.y)) {
+        return rects[rects.length - 1];
+      }
+
+      const containingRect = rects.find((rect) => (
+        anchor.x >= rect.left - 2
+        && anchor.x <= rect.right + 2
+        && anchor.y >= rect.top - 2
+        && anchor.y <= rect.bottom + 2
+      ));
+      if (containingRect) {
+        return containingRect;
+      }
+
+      return rects.reduce((best, rect) => {
+        if (!best) {
+          return rect;
+        }
+
+        const bestCenter = getRectCenter(best);
+        const rectCenter = getRectCenter(rect);
+        const bestDistance = Math.hypot(bestCenter.x - anchor.x, bestCenter.y - anchor.y);
+        const rectDistance = Math.hypot(rectCenter.x - anchor.x, rectCenter.y - anchor.y);
+        return rectDistance < bestDistance ? rect : best;
+      }, null);
+    }
+
     function normalizeSelectionText(text) {
       return typeof text === 'string' ? text.replace(/\s+/g, ' ').trim() : '';
     }
@@ -127,17 +197,25 @@
           left: rect.left + Math.min(16, Math.max(rect.width - 48, 0)),
           top: rect.top + Math.min(18, Math.max(rect.height / 2, 0)),
           width: Math.max(rect.width, 40),
-          height: Math.max(rect.height, 24)
+          height: Math.max(rect.height, 24),
+          right: rect.right,
+          bottom: rect.bottom
         }
       };
     }
 
-    function positionElement(element, rect, topOffset) {
+    function positionElement(element, rect, topOffset, anchor) {
       if (!element || !rect) {
         return;
       }
 
-      const left = clamp(rect.left, 12, window.innerWidth - 220);
+      const elementWidth = Math.max(element.offsetWidth || 0, 72);
+      const maxLeft = Math.max(12, window.innerWidth - elementWidth - 12);
+      const anchorX = Number.isFinite(anchor?.x) ? anchor.x : rect.left;
+      const preferredLeft = Number.isFinite(rect.right) && anchorX >= rect.left
+        ? Math.min(Math.max(anchorX - (elementWidth / 2), rect.left), rect.right - 12)
+        : rect.left;
+      const left = clamp(preferredLeft, 12, maxLeft);
       const top = clamp(rect.top - topOffset, 12, window.innerHeight - 80);
       element.style.left = `${left}px`;
       element.style.top = `${top}px`;
@@ -200,14 +278,15 @@
       }
     }
 
-    function readWindowSelection() {
+    function readWindowSelection(anchor) {
       const selection = window.getSelection();
       const text = selection ? normalizeSelectionText(selection.toString()) : '';
       if (!selection || selection.rangeCount === 0 || !isSupportedSelectionLength(text)) {
         return null;
       }
 
-      const rect = selection.getRangeAt(0).getBoundingClientRect();
+      const range = selection.getRangeAt(0);
+      const rect = pickBestClientRect(range.getClientRects(), anchor) || normalizeRect(range.getBoundingClientRect());
       if (!rect || (!rect.width && !rect.height)) {
         return null;
       }
@@ -215,8 +294,8 @@
       return { text, rect };
     }
 
-    function readSelection(target) {
-      const selected = getTextFieldSelection(target) || readWindowSelection();
+    function readSelection(target, anchor) {
+      const selected = getTextFieldSelection(target) || readWindowSelection(anchor);
       if (!selected) {
         currentSelectionRect = null;
         currentSelectionText = '';
@@ -229,13 +308,13 @@
       return { text, rect };
     }
 
-    function updateChipFromSelection(target) {
+    function updateChipFromSelection(target, anchor) {
       if (!enabled) {
         hideChip();
         return;
       }
 
-      const selected = readSelection(target);
+      const selected = readSelection(target, anchor);
       if (!selected) {
         hideChip();
         return;
@@ -243,7 +322,7 @@
 
       ensureUi();
       chipEl.style.display = 'block';
-      positionElement(chipEl, selected.rect, 42);
+      positionElement(chipEl, selected.rect, 42, anchor);
     }
 
     function renderPopover(text, translation, isLoading, errorMessage) {
@@ -299,7 +378,7 @@
       ensureUi();
       renderPopover(text, '', true, '');
       popoverEl.style.display = 'block';
-      positionElement(popoverEl, currentSelectionRect || { left: 12, top: 72 }, -16);
+      positionElement(popoverEl, currentSelectionRect || { left: 12, top: 72, right: 12 }, -16, lastPointerAnchor);
       hideChip();
 
       try {
@@ -330,13 +409,13 @@
 
         renderPopover(text, translation, false, '');
         popoverEl.style.display = 'block';
-        positionElement(popoverEl, currentSelectionRect || { left: 12, top: 72 }, -16);
+        positionElement(popoverEl, currentSelectionRect || { left: 12, top: 72, right: 12 }, -16, lastPointerAnchor);
         void options;
         return translation;
       } catch (error) {
         renderPopover(text, '', false, error && error.message ? error.message : '선택 텍스트 번역 실패');
         popoverEl.style.display = 'block';
-        positionElement(popoverEl, currentSelectionRect || { left: 12, top: 72 }, -16);
+        positionElement(popoverEl, currentSelectionRect || { left: 12, top: 72, right: 12 }, -16, lastPointerAnchor);
         throw error;
       }
     }
@@ -357,7 +436,10 @@
 
     function handlePointerUp(event) {
       const target = event ? event.target : document.activeElement;
-      setTimeout(() => updateChipFromSelection(target), 30);
+      lastPointerAnchor = event && Number.isFinite(event.clientX) && Number.isFinite(event.clientY)
+        ? { x: event.clientX, y: event.clientY }
+        : null;
+      setTimeout(() => updateChipFromSelection(target, lastPointerAnchor), 30);
     }
 
     function handleSelectionChange() {
@@ -365,7 +447,7 @@
         clearTimeout(selectionChangeTimer);
       }
       selectionChangeTimer = setTimeout(() => {
-        updateChipFromSelection(document.activeElement);
+        updateChipFromSelection(document.activeElement, lastPointerAnchor);
       }, 30);
     }
 

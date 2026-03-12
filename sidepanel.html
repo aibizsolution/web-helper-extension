@@ -593,7 +593,7 @@
       z-index: 1;
       display: grid;
       grid-template-columns: 1fr;
-      gap: 8px;
+      gap: 0;
     }
 
     .translation-engine-field {
@@ -601,11 +601,15 @@
       grid-template-columns: 96px minmax(0, 1fr);
       align-items: center;
       gap: 10px;
-      min-height: 52px;
-      padding: 8px 10px;
-      border-radius: 12px;
-      border: 1px solid rgba(255, 255, 255, 0.08);
-      background: rgba(9, 12, 17, 0.72);
+      min-height: 48px;
+      padding: 10px 0;
+      border-top: 1px solid rgba(255, 255, 255, 0.08);
+      background: transparent;
+    }
+
+    .translation-engine-field:first-child {
+      border-top: 0;
+      padding-top: 0;
     }
 
     .translation-engine-field.model-field {
@@ -689,7 +693,9 @@
       align-items: center;
       gap: 8px;
       margin-top: 8px;
+      padding-top: 10px;
       min-height: 20px;
+      border-top: 1px solid rgba(255, 255, 255, 0.08);
     }
 
     .translation-engine-summary-head {
@@ -760,6 +766,8 @@
       grid-template-columns: repeat(2, minmax(0, 1fr));
       gap: 8px;
       margin-top: 10px;
+      padding-top: 10px;
+      border-top: 1px solid rgba(255, 255, 255, 0.08);
     }
 
     .translation-action-grid .btn {
