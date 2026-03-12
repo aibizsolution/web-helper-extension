@@ -1,317 +1,390 @@
 /**
  * Background Service Worker
  *
- * 주요 역할:
- * - Content script 자동 등록 및 수동 주입
- * - Side Panel 동작 설정
- * - Extension 생명주기 관리
- *
- * 참고: Service Worker는 ES6 모듈 import를 지원하지 않으므로 인라인 로거 사용
+ * 역할:
+ * - Content script 등록/주입
+ * - 선택 텍스트 우클릭 메뉴
+ * - 사이드패널 열기 브리지
+ * - 전체 캐시 상태 조회
  */
 
-// ===== 로깅 시스템 =====
-// DEBUG 레벨은 설정에서 토글 가능, INFO/WARN/ERROR는 항상 출력
 const LEVEL_MAP = { DEBUG: 0, INFO: 1, WARN: 2, ERROR: 3 };
 let currentLogLevel = 'INFO';
 
-/**
- * 로거 초기화 - storage에서 디버그 설정 로드
- */
+const ACTIONS = {
+  PING: 'PING',
+  TRANSLATE_SELECTION: 'TRANSLATE_SELECTION',
+  OPEN_QUICK_TRANSLATE_PANEL: 'OPEN_QUICK_TRANSLATE_PANEL',
+  FAST_TRANSLATE_INDEXED_TEXT: 'FAST_TRANSLATE_INDEXED_TEXT',
+  GET_TOTAL_CACHE_STATUS: 'getTotalCacheStatus',
+  FETCH_HTML_FOR_BOT_AUDIT: 'FETCH_HTML_FOR_BOT_AUDIT'
+};
+
+const CONTENT_SCRIPT_FILES = [
+  'content/bootstrap.js',
+  'content/api.js',
+  'content/provider.js',
+  'content/cache.js',
+  'content/industry.js',
+  'content/dom.js',
+  'content/title.js',
+  'content/progress.js',
+  'content/selection.js',
+  'content.js'
+];
+
+const CONTEXT_MENU_ID = 'wpt-translate-selection';
+const QUICK_TRANSLATE_SESSION_KEY = 'lastActiveTab';
+const FAST_TRANSLATE_TARGET_LANGUAGE = 'ko';
+const SIDE_PANEL_COMMAND_ID = 'open-side-panel';
+const openSidePanelWindows = new Set();
+
 (async () => {
   try {
     const result = await chrome.storage.local.get(['debugLog']);
     currentLogLevel = result.debugLog ? 'DEBUG' : 'INFO';
-  } catch (error) {
-    // storage 접근 실패 시 기본값(INFO) 유지
+  } catch (_) {
+    currentLogLevel = 'INFO';
   }
 })();
 
-/**
- * 디버그 설정 변경 감지
- */
 chrome.storage.onChanged.addListener((changes, area) => {
   if (area === 'local' && changes.debugLog) {
     currentLogLevel = changes.debugLog.newValue ? 'DEBUG' : 'INFO';
   }
 });
 
-/**
- * 구조화된 로그 출력
- * @param {string} level - DEBUG|INFO|WARN|ERROR
- * @param {string} evt - 이벤트명 (대문자_스네이크_케이스)
- * @param {string} msg - 사람이 읽기 쉬운 요약 메시지
- * @param {object} data - 추가 데이터 (자동으로 JSON 직렬화)
- * @param {Error|string} err - 에러 객체 또는 메시지
- */
 function log(level, evt, msg = '', data = {}, err = null) {
-  // DEBUG 레벨 필터링 (다른 레벨은 항상 출력)
-  if (level === 'DEBUG' && LEVEL_MAP[level] < LEVEL_MAP[currentLogLevel]) return;
+  if (level === 'DEBUG' && LEVEL_MAP[level] < LEVEL_MAP[currentLogLevel]) {
+    return;
+  }
 
   const record = { ts: new Date().toISOString(), level, ns: 'background', evt, msg, ...data };
-
-  // 에러 정보 추가
   if (err) {
-    if (err instanceof Error) {
-      record.err = err.message;
-      record.stack = err.stack;
-    } else {
-      record.err = String(err);
-    }
+    record.err = err instanceof Error ? err.message : String(err);
   }
 
   const prefix = `[WPT][${level}][background]`;
-  const consoleMethod = level === 'ERROR' ? 'error' : level === 'WARN' ? 'warn' : 'log';
-
-  // 구조화된 출력: prefix + evt + msg + data
-  console[consoleMethod]('%s %s %o', prefix, evt, msg || '', record);
+  const method = level === 'ERROR' ? 'error' : level === 'WARN' ? 'warn' : 'log';
+  console[method]('%s %s %o', prefix, evt, record);
 }
 
 const logDebug = (evt, msg, data, err) => log('DEBUG', evt, msg, data, err);
 const logInfo = (evt, msg, data, err) => log('INFO', evt, msg, data, err);
-const logWarn = (evt, msg, data, err) => log('WARN', evt, msg, data, err);
 const logError = (evt, msg, data, err) => log('ERROR', evt, msg, data, err);
 
-// ===== Extension 설치 및 초기화 =====
-
-/**
- * Extension 설치/업데이트 시 초기 설정
- */
 chrome.runtime.onInstalled.addListener(async () => {
-  logInfo('EXTENSION_INSTALLED', '웹페이지 번역기가 설치되었습니다');
-
-  // Side Panel 동작 설정: 아이콘 클릭 시 패널 자동 오픈
-  try {
-    await chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true });
-    logInfo('SIDE_PANEL_BEHAVIOR_SET', 'Side Panel 동작 설정 완료');
-  } catch (error) {
-    logInfo('SIDE_PANEL_BEHAVIOR_FAILED', 'Side Panel 동작 설정 실패 (수동 오픈 사용)', {}, error);
-  }
-
-  // Content script 상시 등록 (페이지 로드 시 자동 주입)
-  try {
-    await chrome.scripting.registerContentScripts([{
-      id: 'content-script',
-      js: ['content/bootstrap.js', 'content/api.js', 'content/cache.js', 'content/industry.js', 'content/dom.js', 'content/title.js', 'content/progress.js', 'content.js'],
-      matches: ['https://*/*', 'http://*/*'],
-      runAt: 'document_start',
-      persistAcrossSessions: true, // 브라우저 재시작 후에도 유지
-    }]);
-    logInfo('CONTENT_SCRIPT_REGISTERED', 'Content script 등록 완료');
-  } catch (error) {
-    // 이미 등록된 경우 무시 (에러가 아님)
-    if (error.message.includes('duplicate')) {
-      logDebug('CONTENT_SCRIPT_ALREADY_REGISTERED', 'Content script 이미 등록됨');
-    } else {
-      logInfo('CONTENT_SCRIPT_REGISTER_FAILED', 'Content script 등록 실패 (수동 주입 사용)', {}, error);
-    }
-  }
+  await initializeExtension();
 });
 
-// ===== Content Script 관리 =====
+chrome.runtime.onStartup.addListener(async () => {
+  await registerContentScripts();
+  await registerContextMenus();
+});
 
-/**
- * Content script 준비 확인 및 주입
- *
- * 동작 흐름:
- * 1. PING 메시지로 준비 상태 확인
- * 2. 준비되지 않았으면 수동 주입
- * 3. CONTENT_READY 메시지 대기 (최대 1.5초)
- *
- * @param {number} tabId - 대상 탭 ID
- * @returns {Promise<void>}
- * @throws {Error} 준비 시간 초과 시
- */
-async function ensureContentScript(tabId) {
-  // 1단계: PING으로 content script 존재 확인
-  const ping = () =>
-    chrome.tabs.sendMessage(tabId, { type: 'PING' })
-      .then(() => {
-        logDebug('CONTENT_PING_SUCCESS', 'Content script 이미 준비됨', { tabId });
-        return true;
-      })
-      .catch(() => {
-        logDebug('CONTENT_PING_FAILED', 'Content script 미주입', { tabId });
-        return false;
-      });
-
-  if (await ping()) {
-    return; // 이미 준비됨
-  }
-
-  // 2단계: Content script 수동 주입
-  logInfo('CONTENT_INJECT_START', 'Content script 수동 주입 시작', { tabId });
-  try {
-    await chrome.scripting.executeScript({
-      target: { tabId },
-      files: ['content/bootstrap.js', 'content/api.js', 'content/cache.js', 'content/industry.js', 'content/dom.js', 'content/title.js', 'content/progress.js', 'content.js'],
-    });
-    logInfo('CONTENT_INJECT_DONE', 'Content script 수동 주입 완료', { tabId });
-  } catch (error) {
-    logError('CONTENT_INJECT_FAILED', 'Content script 주입 실패', { tabId }, error);
-    throw error;
-  }
-
-  // 3단계: CONTENT_READY 메시지 대기 (최대 1.5초)
-  await new Promise((resolve, reject) => {
-    const timeout = setTimeout(() => {
-      chrome.runtime.onMessage.removeListener(listener);
-      reject(new Error('Content script 준비 타임아웃'));
-    }, 1500);
-
-    const listener = (msg, sender) => {
-      if (sender.tab?.id === tabId && msg?.type === 'CONTENT_READY') {
-        clearTimeout(timeout);
-        chrome.runtime.onMessage.removeListener(listener);
-        logInfo('CONTENT_READY_RECEIVED', 'Content script 준비 완료', { tabId });
-        resolve();
-      }
-    };
-
-    chrome.runtime.onMessage.addListener(listener);
-
-    // 주입 직후 PING 재시도 (일부 페이지는 즉시 응답 가능)
-    setTimeout(async () => {
-      if (await ping()) {
-        clearTimeout(timeout);
-        chrome.runtime.onMessage.removeListener(listener);
-        resolve();
-      }
-    }, 100);
+if (chrome.sidePanel?.onOpened) {
+  chrome.sidePanel.onOpened.addListener((info) => {
+    if (info?.windowId) {
+      openSidePanelWindows.add(info.windowId);
+    }
   });
 }
 
-// ===== 메시지 핸들러 =====
+if (chrome.sidePanel?.onClosed) {
+  chrome.sidePanel.onClosed.addListener((info) => {
+    if (info?.windowId) {
+      openSidePanelWindows.delete(info.windowId);
+    }
+  });
+}
 
-/**
- * sidepanel에서 전체 IndexedDB 캐시 상태 조회 요청을 받음
- * background는 확장 프로그램 레벨에서 전체 캐시에 접근 가능
- */
-chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
-  if (request.action === 'getTotalCacheStatus') {
-    getTotalCacheStatusFromDB().then((result) => {
-      sendResponse({ success: true, count: result.count, size: result.size });
-    }).catch((error) => {
-      logError('TOTAL_CACHE_STATUS_ERROR', '전체 캐시 상태 조회 실패', {}, error);
-      sendResponse({ success: false, error: error.message });
-    });
-    return true; // 비동기 응답
+chrome.commands.onCommand.addListener((command, tab) => {
+  if (command !== SIDE_PANEL_COMMAND_ID) {
+    return;
   }
 
-  // GEO 검사: 봇 시뮬레이션용 HTML Fetch
-  if (request.action === 'FETCH_HTML_FOR_BOT_AUDIT') {
-    const url = request.url;
-    if (!url) {
-      sendResponse({ success: false, error: 'URL이 필요합니다' });
-      return false;
+  void handleOpenSidePanelCommand(tab);
+});
+
+async function initializeExtension() {
+  logInfo('EXTENSION_INSTALLED', '확장 초기화 시작');
+
+  try {
+    await chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true });
+  } catch (error) {
+    logDebug('SIDE_PANEL_BEHAVIOR_FAILED', 'Side Panel 동작 설정 실패', {}, error);
+  }
+
+  await registerContentScripts();
+  await registerContextMenus();
+}
+
+async function openSidePanelForWindow(windowId) {
+  if (!windowId || !chrome.sidePanel?.open) {
+    return false;
+  }
+
+  await chrome.sidePanel.open({ windowId });
+  openSidePanelWindows.add(windowId);
+  return true;
+}
+
+async function closeSidePanelForWindow(windowId) {
+  if (!windowId || !chrome.sidePanel?.close) {
+    return false;
+  }
+
+  await chrome.sidePanel.close({ windowId });
+  openSidePanelWindows.delete(windowId);
+  return true;
+}
+
+async function handleOpenSidePanelCommand(tab) {
+  try {
+    const fallbackWindow = !tab?.windowId
+      ? await chrome.windows.getLastFocused()
+      : null;
+    const windowId = tab?.windowId || fallbackWindow?.id;
+
+    if (!windowId) {
+      logDebug('SIDE_PANEL_SHORTCUT_SKIPPED', '사이드패널 열기 단축키를 처리하지 못했습니다.', {
+        windowId: null
+      });
+      return;
     }
 
-    // http/https만 허용
-    if (!url.startsWith('http://') && !url.startsWith('https://')) {
+    const isOpen = openSidePanelWindows.has(windowId);
+    if (isOpen) {
+      const closed = await closeSidePanelForWindow(windowId);
+      if (closed) {
+        logInfo('SIDE_PANEL_SHORTCUT_CLOSED', '단축키로 사이드패널 닫기', { windowId });
+        return;
+      }
+    }
+
+    const opened = await openSidePanelForWindow(windowId);
+    if (!opened) {
+      logDebug('SIDE_PANEL_SHORTCUT_SKIPPED', '사이드패널 열기 단축키를 처리하지 못했습니다.', {
+        windowId
+      });
+      return;
+    }
+
+    logInfo('SIDE_PANEL_SHORTCUT_OPENED', '단축키로 사이드패널 열기', { windowId });
+  } catch (error) {
+    logError('SIDE_PANEL_SHORTCUT_FAILED', '단축키로 사이드패널 열기 실패', {}, error);
+  }
+}
+
+async function registerContentScripts() {
+  try {
+    await chrome.scripting.unregisterContentScripts({ ids: ['content-script'] }).catch(() => {});
+    await chrome.scripting.registerContentScripts([{
+      id: 'content-script',
+      js: CONTENT_SCRIPT_FILES,
+      matches: ['https://*/*', 'http://*/*'],
+      runAt: 'document_start',
+      persistAcrossSessions: true
+    }]);
+    logInfo('CONTENT_SCRIPT_REGISTERED', 'Content script 등록 완료');
+  } catch (error) {
+    logError('CONTENT_SCRIPT_REGISTER_FAILED', 'Content script 등록 실패', {}, error);
+  }
+}
+
+async function registerContextMenus() {
+  try {
+    await chrome.contextMenus.removeAll();
+    chrome.contextMenus.create({
+      id: CONTEXT_MENU_ID,
+      title: '선택 텍스트 번역',
+      contexts: ['selection']
+    });
+    logInfo('CONTEXT_MENU_REGISTERED', '선택 번역 메뉴 등록 완료');
+  } catch (error) {
+    logError('CONTEXT_MENU_REGISTER_FAILED', '선택 번역 메뉴 등록 실패', {}, error);
+  }
+}
+
+async function ensureContentScript(tabId) {
+  try {
+    await chrome.tabs.sendMessage(tabId, { type: ACTIONS.PING });
+    return;
+  } catch (_) {
+    // inject below
+  }
+
+  await chrome.scripting.executeScript({
+    target: { tabId },
+    files: CONTENT_SCRIPT_FILES
+  });
+}
+
+chrome.contextMenus.onClicked.addListener(async (info, tab) => {
+  if (info.menuItemId !== CONTEXT_MENU_ID || !tab?.id || !info.selectionText) {
+    return;
+  }
+
+  try {
+    await ensureContentScript(tab.id);
+    await chrome.tabs.sendMessage(tab.id, {
+      action: ACTIONS.TRANSLATE_SELECTION,
+      text: info.selectionText
+    });
+  } catch (error) {
+    logError('SELECTION_TRANSLATE_DISPATCH_FAILED', '우클릭 선택 번역 전달 실패', {
+      tabId: tab.id
+    }, error);
+  }
+});
+
+chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+  if (request.action === ACTIONS.GET_TOTAL_CACHE_STATUS) {
+    getTotalCacheStatusFromDB()
+      .then((result) => sendResponse({ success: true, count: result.count, size: result.size }))
+      .catch((error) => sendResponse({ success: false, error: error.message }));
+    return true;
+  }
+
+  if (request.action === ACTIONS.OPEN_QUICK_TRANSLATE_PANEL) {
+    void (async () => {
+      try {
+        await chrome.storage.session.set({
+          [QUICK_TRANSLATE_SESSION_KEY]: 'quickTranslate',
+          pendingQuickTranslate: {
+            text: request.text || '',
+            translation: request.translation || '',
+            ts: Date.now()
+          }
+        });
+
+        if (sender.tab?.windowId) {
+          await openSidePanelForWindow(sender.tab.windowId);
+        }
+
+        sendResponse({ success: true });
+      } catch (error) {
+        sendResponse({ success: false, error: error.message });
+      }
+    })();
+    return true;
+  }
+
+  if (request.action === ACTIONS.FAST_TRANSLATE_INDEXED_TEXT) {
+    translateIndexedTextFast(request.text || '', request.targetLanguage || FAST_TRANSLATE_TARGET_LANGUAGE)
+      .then((translatedText) => sendResponse({ success: true, translatedText }))
+      .catch((error) => sendResponse({ success: false, error: error.message }));
+    return true;
+  }
+
+  if (request.action === ACTIONS.FETCH_HTML_FOR_BOT_AUDIT) {
+    const url = request.url;
+    if (!url || (!url.startsWith('http://') && !url.startsWith('https://'))) {
       sendResponse({ success: false, error: 'http/https URL만 지원합니다' });
       return false;
     }
 
-    logInfo('GEO_BOT_FETCH_START', 'HTML 가져오기 시작', { url });
-
     fetch(url)
-      .then(response => {
+      .then((response) => {
         if (!response.ok) {
           throw new Error(`HTTP ${response.status}: ${response.statusText}`);
         }
         return response.text();
       })
-      .then(html => {
-        logInfo('GEO_BOT_FETCH_SUCCESS', 'HTML 가져오기 완료', { size: html.length });
-        sendResponse({ success: true, html });
-      })
-      .catch(error => {
-        logError('GEO_BOT_FETCH_ERROR', 'HTML 가져오기 실패', { url }, error);
-        sendResponse({ success: false, error: error.message });
-      });
-
-    return true; // 비동기 응답
+      .then((html) => sendResponse({ success: true, html }))
+      .catch((error) => sendResponse({ success: false, error: error.message }));
+    return true;
   }
+
+  return false;
 });
 
-/**
- * IndexedDB에서 전체 캐시 상태 조회
- * @returns {Promise<{count: number, size: number}>}
- */
+async function translateIndexedTextFast(text, targetLanguage) {
+  const payload = String(text || '').trim();
+  if (!payload) {
+    return '';
+  }
+
+  const response = await fetch(`https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=${encodeURIComponent(targetLanguage || FAST_TRANSLATE_TARGET_LANGUAGE)}&dt=t`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8'
+    },
+    body: `q=${encodeURIComponent(payload)}`
+  });
+
+  let data = null;
+  try {
+    data = await response.json();
+  } catch (_) {
+    data = null;
+  }
+
+  if (!response.ok) {
+    throw new Error((data && data.error && data.error.message) || `빠른 번역 요청 실패 (${response.status})`);
+  }
+
+  const translatedText = Array.isArray(data?.[0])
+    ? data[0].map((item) => Array.isArray(item) ? (item[0] || '') : '').join('')
+    : '';
+
+  if (!translatedText.trim()) {
+    throw new Error('빠른 번역 응답이 비어 있습니다.');
+  }
+
+  return translatedText;
+}
+
 async function getTotalCacheStatusFromDB() {
-  return new Promise((resolve, reject) => {
-    const request = indexedDB.open('TranslationCache', 1);
+  return await new Promise((resolve, reject) => {
+    const request = indexedDB.open('TranslationCache', 2);
 
-    request.onsuccess = (event) => {
+    request.onupgradeneeded = (event) => {
       const db = event.target.result;
+      if (!db.objectStoreNames.contains('translations')) {
+        db.createObjectStore('translations', { keyPath: 'hash' });
+      }
+      if (!db.objectStoreNames.contains('translations_v2')) {
+        db.createObjectStore('translations_v2', { keyPath: 'hash' });
+      }
+      if (!db.objectStoreNames.contains('page_snapshots_v1')) {
+        db.createObjectStore('page_snapshots_v1', { keyPath: 'hash' });
+      }
+    };
 
+    request.onerror = () => reject(request.error || new Error('IndexedDB 열기 실패'));
+    request.onsuccess = async (event) => {
+      const db = event.target.result;
       try {
-        // Object store 존재 여부 확인
-        if (!db.objectStoreNames.contains('translations')) {
+        const stores = ['translations', 'translations_v2', 'page_snapshots_v1'].filter((storeName) => db.objectStoreNames.contains(storeName));
+        if (stores.length === 0) {
           db.close();
-          logDebug('TOTAL_CACHE_NOT_FOUND', 'Object store "translations"가 없음 (캐시 미생성)');
           resolve({ count: 0, size: 0 });
           return;
         }
 
-        const transaction = db.transaction(['translations'], 'readonly');
-        const store = transaction.objectStore('translations');
-        const getAllRequest = store.getAll();
+        let totalCount = 0;
+        let totalSize = 0;
 
-        getAllRequest.onsuccess = () => {
-          const items = getAllRequest.result;
-          let totalSize = 0;
+        await Promise.all(stores.map((storeName) => new Promise((res, rej) => {
+          const tx = db.transaction([storeName], 'readonly');
+          const store = tx.objectStore(storeName);
+          const getAllRequest = store.getAll();
+          getAllRequest.onsuccess = () => {
+            const items = getAllRequest.result || [];
+            totalCount += items.length;
+            totalSize += items.reduce((sum, item) => sum + JSON.stringify(item).length, 0);
+            res();
+          };
+          getAllRequest.onerror = () => rej(getAllRequest.error);
+        })));
 
-          items.forEach(item => {
-            totalSize += JSON.stringify(item).length;
-          });
-
-          db.close();
-          logDebug('TOTAL_CACHE_STATUS_SUCCESS', '전체 IndexedDB 캐시 상태 조회 성공', {
-            count: items.length,
-            sizeBytes: totalSize
-          });
-          resolve({ count: items.length, size: totalSize });
-        };
-
-        getAllRequest.onerror = () => {
-          db.close();
-          const errorMsg = getAllRequest.error?.message || '캐시 조회 실패';
-          reject(new Error(errorMsg));
-        };
+        db.close();
+        resolve({ count: totalCount, size: totalSize });
       } catch (error) {
         db.close();
         reject(error);
       }
     };
-
-    request.onerror = () => {
-      const errorMsg = request.error?.message || 'IndexedDB 열기 실패';
-      reject(new Error(errorMsg));
-    };
-
-    request.onupgradeneeded = (event) => {
-      const db = event.target.result;
-      logDebug('TOTAL_CACHE_UPGRADE', 'IndexedDB 업그레이드');
-
-      // Object store가 없으면 생성
-      if (!db.objectStoreNames.contains('translations')) {
-        db.createObjectStore('translations', { keyPath: 'hash' });
-        logDebug('TOTAL_CACHE_STORE_CREATED', 'Object store "translations" 생성');
-      }
-    };
   });
 }
-
-// ===== Side Panel 관리 =====
-
-/**
- * Side Panel은 Chrome이 자동으로 관리 (Window-level 동작)
- *
- * manifest.json의 openPanelOnActionClick: true 설정으로
- * 아이콘 클릭 시 자동으로 패널이 열림
- *
- * 패널 상태 추적이나 URL 변경 감지는 하지 않음
- * (불필요한 로그 방지 - CLAUDE.md 참고)
- *
- * 권한 체크는 sidepanel.js에서 사용자 액션(번역 버튼 클릭) 시에만 수행
- */

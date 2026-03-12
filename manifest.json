@@ -1,14 +1,15 @@
 {
   "manifest_version": 3,
-  "name": "무조건 한글로 번역해드림",
+  "name": "웹 도우미",
   "version": "2.3.0",
-  "description": "OpenRouter AI를 사용하여 웹페이지를 한글로 번역하는 확장프로그램",
+  "description": "웹 번역, 텍스트 번역, 검색, SEO·AI 노출 진단을 돕는 확장프로그램",
   "permissions": [
     "activeTab",
     "storage",
     "scripting",
     "sidePanel",
-    "tabs"
+    "tabs",
+    "contextMenus"
   ],
   "host_permissions": [
     "https://*/*",
@@ -18,11 +19,20 @@
     "file:///*"
   ],
   "action": {
-    "default_title": "무조건 한글로 번역해드림",
+    "default_title": "웹 도우미",
     "default_icon": {
       "16": "icons/icon16.png",
       "48": "icons/icon48.png",
       "128": "icons/icon128.png"
+    }
+  },
+  "commands": {
+    "open-side-panel": {
+      "suggested_key": {
+        "default": "Ctrl+Shift+Y",
+        "mac": "Command+Shift+Y"
+      },
+      "description": "웹 도우미 사이드패널 열기"
     }
   },
   "icons": {

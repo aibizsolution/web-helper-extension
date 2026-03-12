@@ -1,86 +1,135 @@
 /**
  * Content Progress Module
- * - 타이머/진행 푸시/배치 카운팅 관리
- * - content.js로부터 port와 상태 getter를 주입받아 동작
+ * - 타이머/진행 푸시/활성 요청 수 관리
  */
-(function progressModule(){
+(function progressModule() {
   try {
     window.WPT = window.WPT || {};
     const WPT = window.WPT;
     const C = (WPT.Constants && WPT.Constants.PORT_MESSAGES) || { PROGRESS: 'progress' };
 
-    // 내부 상태
     let activeMs = 0;
     let lastTick = null;
     let timerId = null;
     let inflight = 0;
-    let portRef = (WPT.__portRef !== undefined) ? WPT.__portRef : null;
-    let getStatus = (typeof WPT.__statusGetter === 'function') ? WPT.__statusGetter : null;
+    let portRef = WPT.__portRef || null;
+    let getStatus = typeof WPT.__statusGetter === 'function' ? WPT.__statusGetter : null;
 
-    function setPort(port) { portRef = port || null; try { WPT.__portRef = portRef; } catch(_){} }
-    function clearPort() { portRef = null; try { WPT.__portRef = null; } catch(_){} }
-    function setStatusGetter(fn) { getStatus = typeof fn === 'function' ? fn : null; try { WPT.__statusGetter = getStatus; } catch(_){} }
-    function getActiveMs() { return activeMs; }
+    function setPort(port) {
+      portRef = port || null;
+      try { WPT.__portRef = portRef; } catch (_) {}
+    }
+
+    function clearPort() {
+      portRef = null;
+      try { WPT.__portRef = null; } catch (_) {}
+    }
+
+    function setStatusGetter(fn) {
+      getStatus = typeof fn === 'function' ? fn : null;
+      try { WPT.__statusGetter = getStatus; } catch (_) {}
+    }
+
+    function getActiveMs() {
+      return activeMs;
+    }
+
+    function tick() {
+      const now = performance.now();
+      if (lastTick !== null) {
+        activeMs += now - lastTick;
+      }
+      lastTick = now;
+    }
 
     function startTimer() {
-      if (timerId) return;
+      if (timerId) {
+        return;
+      }
       lastTick = performance.now();
       timerId = setInterval(() => {
-        const now = performance.now();
-        activeMs += (now - lastTick);
-        lastTick = now;
+        tick();
         pushProgress();
       }, 1000);
     }
 
     function stopTimer() {
-      if (!timerId) return;
-      clearInterval(timerId);
-      if (lastTick) {
-        activeMs += performance.now() - lastTick;
+      if (!timerId) {
+        return;
       }
+      clearInterval(timerId);
       timerId = null;
+      tick();
       lastTick = null;
       pushProgress();
     }
 
     function onBatchStart() {
-      inflight++;
-      if (inflight === 1) startTimer();
+      inflight += 1;
+      if (inflight === 1) {
+        startTimer();
+      }
+      updateActiveRequests();
     }
 
     function onBatchEnd() {
-      inflight--;
-      if (inflight === 0) stopTimer();
+      inflight = Math.max(0, inflight - 1);
+      if (inflight === 0) {
+        stopTimer();
+      }
+      updateActiveRequests();
+    }
+
+    function updateActiveRequests() {
+      if (!getStatus) {
+        return;
+      }
+      const status = getStatus();
+      if (status) {
+        status.activeRequests = inflight;
+      }
     }
 
     function pushProgress() {
-      if (!portRef || !getStatus) return;
+      if (!portRef || !getStatus) {
+        return;
+      }
+
       try {
         const status = getStatus();
         portRef.postMessage({
           type: C.PROGRESS,
-          data: { ...status, activeMs }
+          data: Object.assign({}, status, { activeMs })
         });
-        if (chrome.runtime.lastError) {
-          portRef = null;
-        }
       } catch (_) {
         portRef = null;
       }
     }
 
+    function reset() {
+      try {
+        stopTimer();
+      } catch (_) {
+        // no-op
+      }
+      activeMs = 0;
+      inflight = 0;
+      updateActiveRequests();
+    }
+
     WPT.Progress = {
-      setPort, clearPort, setStatusGetter,
-      startTimer, stopTimer, reset, onBatchStart, onBatchEnd,
-      pushProgress, getActiveMs
+      setPort,
+      clearPort,
+      setStatusGetter,
+      startTimer,
+      stopTimer,
+      reset,
+      onBatchStart,
+      onBatchEnd,
+      pushProgress,
+      getActiveMs
     };
   } catch (_) {
     // no-op
   }
 })();
-    function reset() {
-      try { stopTimer(); } catch (_) {}
-      activeMs = 0;
-      inflight = 0;
-    }

@@ -10,6 +10,8 @@
     let industryContext = null;
 
     function reset(){ industryContext = null; }
+    function hasContext(){ return Boolean(industryContext); }
+    function getContext(){ return industryContext; }
 
     function buildIndustrySampleSegments(texts, maxSegments = 24, maxChars = 2500){
       if(!Array.isArray(texts) || texts.length === 0) return [];
@@ -58,17 +60,18 @@
       ].filter(Boolean).join('\n');
     }
 
-    async function ensureIndustryContext(texts, apiKey, model){
+    async function ensureIndustryContext(texts, provider, apiKey, model, signal){
       const samples = buildIndustrySampleSegments(texts);
       if(samples.length === 0){ industryContext = null; return; }
       try{
-        const prompt = `다음은 웹페이지에서 발췌한 텍스트 일부입니다. 콘텐츠가 속한 산업군을 분석하고, 번역 시 참고할 핵심 정보를 JSON으로 제공해주세요.\n\n샘플 텍스트:\n${samples.map((s,i)=>`[${i}] ${s}`).join('\n')}\n\n응답 형식 (JSON만 반환): {"industry": "산업군 이름", "keywords": ["용어1", ...], "tone": "권장 어조", "summary": "두 문장 이내 근거"}`;
-        const response = await (WPT.Api && WPT.Api.requestOpenRouter ? WPT.Api.requestOpenRouter(prompt, apiKey, model, { purpose: 'industry-detect', itemCount: samples.length }) : Promise.resolve(''));
+        const response = await (WPT.Provider && WPT.Provider.detectContext
+          ? WPT.Provider.detectContext({ provider, apiKey, model, samples, signal })
+          : Promise.resolve(''));
         const parsed = parseIndustryContext(response);
         industryContext = parsed || null;
       }catch{ industryContext = null; }
     }
 
-    WPT.Industry = { ensureIndustryContext, buildIndustryInstruction, reset };
+    WPT.Industry = { ensureIndustryContext, buildIndustryInstruction, reset, hasContext, getContext };
   } catch(_) { /* no-op */ }
 })();

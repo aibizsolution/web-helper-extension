@@ -13,7 +13,8 @@
  */
 
 import { GEO_CHECKLIST, groupChecklistByCategory, calculateTotalWeights } from './geo-checklist.js';
-import { getApiKey, getModel } from './settings.js';
+import { getActiveTranslationConfig } from './storage.js';
+import { runPrompt } from './provider-client.js';
 
 /**
  * @typedef {Object} AuditResult
@@ -201,8 +202,8 @@ export function calculateScores(results) {
  * @returns {Promise<string>} 전체 텍스트
  */
 export async function getStrengths(auditResult) {
-  const apiKey = await getApiKey();
-  if (!apiKey) throw new Error('API Key가 설정되지 않았습니다');
+  const config = await getActiveTranslationConfig();
+  if (!config.hasApiKey) throw new Error('API Key가 설정되지 않았습니다');
 
   const passedItems = auditResult.results
     .filter(r => r.passed)
@@ -226,9 +227,7 @@ ${passedItems}
 - 긍정적이고 격려하는 톤
 - 한국어`;
 
-  const geoModel = 'openai/gpt-4o-mini';
-
-  return await fetchLLM(prompt, apiKey, geoModel);
+  return await fetchLLM(prompt, config);
 }
 
 /**
@@ -238,8 +237,8 @@ ${passedItems}
  * @returns {Promise<string>} 전체 텍스트
  */
 export async function getImprovements(auditResult) {
-  const apiKey = await getApiKey();
-  if (!apiKey) throw new Error('API Key가 설정되지 않았습니다');
+  const config = await getActiveTranslationConfig();
+  if (!config.hasApiKey) throw new Error('API Key가 설정되지 않았습니다');
 
   const failedItems = auditResult.results
     .filter(r => !r.passed)
@@ -299,9 +298,7 @@ ${failedItems}
 - 실행 가능한 구체적인 방법
 - 코드 예시는 HTML 엔터티 없이 일반 코드블록 사용`;
 
-  const geoModel = 'openai/gpt-4o-mini';
-
-  return await fetchLLM(prompt, apiKey, geoModel, 3000);
+  return await fetchLLM(prompt, config);
 }
 
 /**
@@ -311,8 +308,8 @@ ${failedItems}
  * @returns {Promise<string>} 전체 텍스트
  */
 export async function getRoadmap(auditResult) {
-  const apiKey = await getApiKey();
-  if (!apiKey) throw new Error('API Key가 설정되지 않았습니다');
+  const config = await getActiveTranslationConfig();
+  if (!config.hasApiKey) throw new Error('API Key가 설정되지 않았습니다');
 
   const failedCount = auditResult.failedCount;
 
@@ -347,42 +344,24 @@ export async function getRoadmap(auditResult) {
 - 격려하는 톤
 - 한국어`;
 
-  const geoModel = 'openai/gpt-4o-mini';
-
-  return await fetchLLM(prompt, apiKey, geoModel);
+  return await fetchLLM(prompt, config);
 }
 
 /**
  * 일반 LLM 요청
  *
  * @param {string} prompt - 프롬프트
- * @param {string} apiKey - API 키
- * @param {string} model - 모델명
- * @param {number} maxTokens - 최대 토큰 수 (기본 2000)
+ * @param {object} config - 활성 프로바이더 구성
  * @returns {Promise<string>} 전체 응답 텍스트
  */
-async function fetchLLM(prompt, apiKey, model, maxTokens = 2000) {
-  const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-    method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${apiKey}`,
-      'Content-Type': 'application/json'
-    },
-    body: JSON.stringify({
-      model,
-      messages: [{ role: 'user', content: prompt }],
-      temperature: 0.7,
-      max_tokens: maxTokens
-    })
+async function fetchLLM(prompt, config) {
+  return await runPrompt({
+    provider: config.provider,
+    model: config.model,
+    apiKey: config.apiKey,
+    prompt,
+    purpose: 'geo-audit'
   });
-
-  if (!response.ok) {
-    const errorData = await response.json();
-    throw new Error(errorData.error?.message || `API 오류: ${response.status}`);
-  }
-
-  const data = await response.json();
-  return data.choices[0].message.content.trim();
 }
 
 /**

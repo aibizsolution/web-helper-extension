@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>무조건 한글로 번역해드림</title>
+  <title>웹 도우미</title>
   <style>
     * {
       margin: 0;
@@ -416,6 +416,379 @@
       box-shadow: var(--shadow);
     }
 
+    .translation-shell {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .translation-shell .main-card {
+      margin-bottom: 0;
+    }
+
+    .translate-subtabs {
+      display: flex;
+      align-items: flex-end;
+      gap: 2px;
+      margin-bottom: 14px;
+      padding: 0 2px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    }
+
+    .translate-subtab {
+      position: relative;
+      width: auto;
+      min-width: 88px;
+      min-height: 40px;
+      margin: 0;
+      padding: 0 14px 10px;
+      border-radius: 0;
+      border: none;
+      background: transparent;
+      color: var(--text-secondary);
+      font-size: 13px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+
+    .translate-subtab:hover {
+      color: var(--text-primary);
+    }
+
+    .translate-subtab:focus-visible {
+      outline: 2px solid rgba(42, 108, 240, 0.55);
+      outline-offset: -2px;
+      border-radius: 8px 8px 0 0;
+    }
+
+    .translate-subtab::after {
+      content: '';
+      position: absolute;
+      left: 12px;
+      right: 12px;
+      bottom: -1px;
+      height: 2px;
+      border-radius: 999px 999px 0 0;
+      background: transparent;
+      transition: background 0.2s ease;
+    }
+
+    .translate-subtab[aria-selected="true"] {
+      color: var(--text-primary);
+    }
+
+    .translate-subtab[aria-selected="true"]::after {
+      background: linear-gradient(90deg, rgba(109, 172, 255, 0.95) 0%, rgba(42, 108, 240, 1) 100%);
+    }
+
+    .translate-panel {
+      display: none;
+    }
+
+    .translate-panel.active {
+      display: block;
+    }
+
+    .translation-engine-card {
+      position: relative;
+      overflow: hidden;
+      padding: 14px;
+      border-radius: var(--radius-lg);
+      border: 1px solid rgba(92, 145, 255, 0.24);
+      background:
+        linear-gradient(180deg, rgba(42, 108, 240, 0.14) 0%, rgba(42, 108, 240, 0.06) 38%, rgba(11, 11, 15, 0.2) 100%);
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
+    }
+
+    .translation-engine-card::after {
+      content: '';
+      position: absolute;
+      right: -48px;
+      bottom: -56px;
+      width: 140px;
+      height: 140px;
+      background: radial-gradient(circle, rgba(42, 108, 240, 0.24) 0%, rgba(42, 108, 240, 0) 70%);
+      pointer-events: none;
+    }
+
+    .translation-engine-header {
+      position: relative;
+      z-index: 1;
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: var(--space-md);
+      margin-bottom: 10px;
+    }
+
+    .translation-engine-title {
+      margin: 0;
+      font-size: 16px;
+      font-weight: 700;
+      color: var(--text-primary);
+    }
+
+    .translation-engine-title-row {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .translation-engine-description {
+      margin-top: 4px;
+      max-width: none;
+      color: var(--text-secondary);
+      font-size: 11px;
+      line-height: 1.5;
+    }
+
+    .translation-engine-badge {
+      position: relative;
+      z-index: 1;
+      flex-shrink: 0;
+      padding: 6px 10px;
+      border-radius: 999px;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      background: rgba(13, 18, 28, 0.72);
+      color: var(--text-primary);
+      font-size: 12px;
+      font-weight: 600;
+      white-space: nowrap;
+    }
+
+    .translation-status-card {
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+      padding: 14px;
+    }
+
+    .translation-status-card .status-header {
+      margin-bottom: 0;
+    }
+
+    .translation-status-overview {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .translation-status-card .progress-text {
+      margin-bottom: 0;
+    }
+
+    .translation-status-card .translation-phase {
+      margin-top: 0;
+      margin-bottom: 0;
+    }
+
+    .translation-status-card .batch-info {
+      margin-top: 0;
+      margin-bottom: 0;
+    }
+
+    .translation-engine-grid {
+      position: relative;
+      z-index: 1;
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 8px;
+    }
+
+    .translation-engine-field {
+      display: grid;
+      grid-template-columns: 96px minmax(0, 1fr);
+      align-items: center;
+      gap: 10px;
+      min-height: 52px;
+      padding: 8px 10px;
+      border-radius: 12px;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      background: rgba(9, 12, 17, 0.72);
+    }
+
+    .translation-engine-field.model-field {
+      grid-column: auto;
+    }
+
+    .translation-engine-field label {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      margin: 0;
+      color: var(--text-secondary);
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.06em;
+      white-space: nowrap;
+    }
+
+    .translation-engine-select-wrap {
+      position: relative;
+      min-width: 0;
+    }
+
+    .translation-engine-select-wrap::after {
+      content: '';
+      position: absolute;
+      right: 14px;
+      top: 50%;
+      width: 8px;
+      height: 8px;
+      border-right: 1.5px solid var(--text-secondary);
+      border-bottom: 1.5px solid var(--text-secondary);
+      transform: translateY(-65%) rotate(45deg);
+      pointer-events: none;
+    }
+
+    .translation-engine-select {
+      width: 100%;
+      appearance: none;
+      -webkit-appearance: none;
+      -moz-appearance: none;
+      min-height: 36px;
+      padding: 0 36px 0 12px;
+      border-radius: 10px;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      background: rgba(255, 255, 255, 0.04);
+      color: var(--text-primary);
+      font-size: 12px;
+      font-weight: 600;
+      line-height: 1.2;
+      transition: border-color 0.2s, box-shadow 0.2s, background 0.2s;
+    }
+
+    .translation-engine-select:hover {
+      background: rgba(255, 255, 255, 0.06);
+      border-color: rgba(255, 255, 255, 0.18);
+    }
+
+    .translation-engine-select:focus {
+      outline: none;
+      border-color: rgba(42, 108, 240, 0.85);
+      box-shadow: 0 0 0 3px rgba(42, 108, 240, 0.16);
+    }
+
+    .translation-engine-select option {
+      background: #12161e;
+      color: var(--text-primary);
+    }
+
+    .translation-engine-field .translation-tooltip-icon {
+      flex: 0 0 auto;
+      width: 16px;
+      height: 16px;
+      font-size: 10px;
+    }
+
+    .translation-engine-summary {
+      position: relative;
+      z-index: 1;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-top: 8px;
+      min-height: 20px;
+    }
+
+    .translation-engine-summary-head {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .translation-engine-summary-label {
+      color: #8fb4ff;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.06em;
+    }
+
+    .translation-engine-inline-note {
+      display: inline-flex;
+      align-items: center;
+      min-height: 22px;
+      padding: 0 8px;
+      border-radius: 999px;
+      border: 1px solid rgba(251, 191, 36, 0.18);
+      background: rgba(120, 53, 15, 0.18);
+      color: #fde68a;
+      font-size: 11px;
+      font-weight: 600;
+      line-height: 1;
+      white-space: nowrap;
+    }
+
+    .translation-tooltip-icon {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 18px;
+      height: 18px;
+      border-radius: 999px;
+      border: 1px solid rgba(143, 180, 255, 0.28);
+      background: rgba(255, 255, 255, 0.06);
+      color: #8fb4ff;
+      font-size: 11px;
+      font-weight: 800;
+      line-height: 1;
+      cursor: help;
+      opacity: 0.9;
+    }
+
+    .translation-tooltip-icon:hover,
+    .translation-tooltip-icon:focus-visible {
+      opacity: 1;
+      outline: none;
+      border-color: rgba(143, 180, 255, 0.52);
+      background: rgba(42, 108, 240, 0.16);
+    }
+
+    .translation-engine-note {
+      width: 100%;
+      margin-top: 2px;
+      color: var(--text-secondary);
+      font-size: 11px;
+      line-height: 1.5;
+    }
+
+    .translation-action-grid {
+      position: relative;
+      z-index: 1;
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 8px;
+      margin-top: 10px;
+    }
+
+    .translation-action-grid .btn {
+      min-height: 42px;
+      margin-bottom: 0;
+      padding: 10px 12px;
+      font-size: 13px;
+    }
+
+    .translation-action-grid .btn.toggle-active {
+      background: rgba(42, 108, 240, 0.18);
+      color: #dbeafe;
+      border: 1px solid rgba(96, 165, 250, 0.45);
+      box-shadow: inset 0 0 0 1px rgba(147, 197, 253, 0.12);
+    }
+
+    .translation-action-grid .btn.toggle-active:hover:not(:disabled) {
+      background: rgba(42, 108, 240, 0.26);
+    }
+
+    .translation-action-note {
+      position: relative;
+      z-index: 1;
+      margin-top: 8px;
+      color: var(--text-secondary);
+      font-size: 11px;
+      line-height: 1.45;
+    }
+
     .permission-card {
       background: var(--bg-card);
       border: 1px solid var(--border-color);
@@ -592,6 +965,18 @@
       margin-bottom: var(--space-md);
     }
 
+    .permission-actions {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 8px;
+      margin-top: 12px;
+    }
+
+    .permission-actions .btn {
+      margin-bottom: 0;
+      min-height: 42px;
+    }
+
     .btn-help {
       font-size: 12px;
       color: var(--text-secondary);
@@ -606,6 +991,26 @@
       color: var(--text-secondary);
       text-align: center;
       margin-bottom: var(--space-md);
+    }
+
+    .translation-phase {
+      margin-top: -6px;
+      margin-bottom: 10px;
+      color: var(--text-secondary);
+      font-size: 12px;
+      text-align: center;
+    }
+
+    .translation-stats {
+      margin-bottom: 0;
+    }
+
+    .translation-stats .stat-card {
+      padding: 12px;
+    }
+
+    .translation-stats .stat-value {
+      font-size: 20px;
     }
 
     /* 배치 정보 */
@@ -758,12 +1163,33 @@
       margin-bottom: 0;
     }
 
+    .form-group-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: var(--space-xs);
+    }
+
     .form-group label {
       display: block;
-      margin-bottom: var(--space-xs);
+      margin-bottom: 0;
       font-weight: 500;
       font-size: 13px;
       color: var(--text-primary);
+    }
+
+    .form-group-link {
+      flex-shrink: 0;
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--status-active);
+      text-decoration: none;
+      white-space: nowrap;
+    }
+
+    .form-group-link:hover {
+      text-decoration: underline;
     }
 
     .form-group input[type="password"],
@@ -805,6 +1231,105 @@
 
     .form-help a:hover {
       text-decoration: underline;
+    }
+
+    .settings-control-stack {
+      display: flex;
+      flex-direction: column;
+      gap: 0;
+      border-radius: 16px;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      background: rgba(9, 12, 17, 0.72);
+      overflow: hidden;
+    }
+
+    .settings-control-card {
+      padding: 14px;
+      border-top: 1px solid rgba(255, 255, 255, 0.07);
+      background: transparent;
+    }
+
+    .settings-control-card:first-child {
+      border-top: none;
+    }
+
+    .settings-control-row {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .settings-select-row {
+      grid-template-columns: minmax(0, 1fr) minmax(170px, 220px);
+    }
+
+    .settings-control-label {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      margin: 0;
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text-primary);
+    }
+
+    .settings-control-card .translation-tooltip-icon {
+      width: 16px;
+      height: 16px;
+      font-size: 10px;
+    }
+
+    .settings-select-wrap {
+      width: 100%;
+    }
+
+    .settings-compact-select {
+      min-height: 36px;
+    }
+
+    .settings-shortcut-actions {
+      display: inline-flex;
+      align-items: center;
+      justify-content: flex-end;
+      gap: 8px;
+      min-width: 0;
+      flex-wrap: wrap;
+    }
+
+    .settings-shortcut-value {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 36px;
+      padding: 0 12px;
+      border-radius: 10px;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      background: rgba(255, 255, 255, 0.04);
+      color: var(--text-primary);
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 0.02em;
+      white-space: nowrap;
+    }
+
+    .settings-control-row .toggle-switch {
+      justify-self: end;
+    }
+
+    .settings-shortcut-value.is-empty {
+      color: var(--text-secondary);
+      font-weight: 600;
+    }
+
+    .settings-inline-btn {
+      width: auto;
+      min-height: 36px;
+      margin: 0;
+      padding: 0 12px;
+      border-radius: 10px;
+      font-size: 12px;
+      white-space: nowrap;
     }
 
     /* 토글 스위치 (44×24) */
@@ -884,6 +1409,29 @@
       color: var(--text-secondary);
       font-size: 12px;
       flex: 1;
+    }
+
+    @media (max-width: 420px) {
+      .translation-engine-header {
+        flex-direction: column;
+      }
+
+      .translation-engine-badge {
+        align-self: flex-start;
+      }
+
+      .translation-engine-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .translation-engine-field.model-field {
+        grid-column: auto;
+      }
+
+      .translation-action-grid,
+      .permission-actions {
+        grid-template-columns: 1fr;
+      }
     }
 
     .ttl-input-group {
@@ -1780,115 +2328,167 @@
     <div class="content-area">
       <!-- 헤더 (고정) -->
       <header class="panel-header">
-        <h1 id="panelTitle">AI 번역</h1>
+        <h1 id="panelTitle">웹 도우미</h1>
       </header>
 
       <!-- 메인 컨텐츠 (스크롤) -->
       <main class="panel-main">
         <!-- 번역 탭 -->
         <div id="translateTab" class="tab-content active">
-          <!-- 권한 요청 섹션 -->
-          <div id="permissionSection" class="permission-card" style="display: none;">
-            <div class="permission-icon">🔒</div>
-            <div id="permissionMessage" class="permission-message">
-              이 사이트 번역을 사용하려면 권한이 필요합니다.
-            </div>
-            <button id="requestPermissionBtn" class="btn">권한 허용</button>
-            <button id="openSettingsBtn" class="btn secondary" style="display: none;">설정 열기</button>
+          <div class="translate-subtabs" role="tablist" aria-label="번역 보기 전환">
+            <button id="translatePageSubtab" class="translate-subtab" type="button" role="tab" aria-selected="true" data-translate-panel="page">현재 페이지</button>
+            <button id="translateHistorySubtab" class="translate-subtab" type="button" role="tab" aria-selected="false" data-translate-panel="history">번역 기록</button>
           </div>
 
-          <!-- 메인 섹션 -->
-          <div id="mainSection">
-            <!-- API Key 없을 때 안내 메시지 -->
-            <div id="noApiKeyMessage" class="permission-card" style="display: none;">
-              <div class="permission-icon">🔑</div>
-              <div class="permission-message">
-                번역 기능을 사용하려면 먼저 API Key를 설정해야 합니다.<br>
-                설정 탭에서 OpenRouter API Key를 입력해주세요.
+          <div id="translatePagePanel" class="translate-panel active">
+            <!-- 권한 요청 섹션 -->
+            <div id="permissionSection" class="permission-card" style="display: none;">
+              <div class="permission-icon">🔒</div>
+              <div id="permissionMessage" class="permission-message">
+                이 사이트 번역을 사용하려면 권한이 필요합니다.
               </div>
-              <button id="goToSettingsBtn" class="btn">설정으로 이동</button>
+              <button id="requestPermissionBtn" class="btn">권한 허용</button>
+              <button id="openSettingsBtn" class="btn secondary" style="display: none;">설정 열기</button>
             </div>
 
-            <!-- 번역 기능 (API Key 있을 때만 표시) -->
-            <div id="translateSection">
-              <div class="main-card">
-                <div class="status-header">
-                  <span class="status-label">현재 상태</span>
-                  <div style="display: flex; align-items: center; gap: 8px;">
-                    <span id="statusBadge" class="status-badge">대기 중</span>
-                  </div>
+            <!-- 메인 섹션 -->
+            <div id="mainSection">
+              <!-- API Key 없을 때 안내 메시지 -->
+              <div id="noApiKeyMessage" class="permission-card" style="display: none;">
+                <div class="permission-icon">🔑</div>
+                <div class="permission-message">
+                  초고속 페이지 번역은 바로 사용할 수 있습니다.<br>
+                  AI 정밀 번역을 쓰려면 설정 탭에서 프로바이더 API Key를 먼저 입력해주세요.<br>
+                  선택 텍스트 번역은 설정 탭에서 초고속 또는 현재 AI 설정으로 고를 수 있습니다.
                 </div>
-
-                <div id="progressText" class="progress-text">번역 대기 중</div>
-
-                <div class="stats-grid">
-                  <div class="stat-card">
-                    <div class="stat-label">번역된 텍스트</div>
-                    <div id="translatedCount" class="stat-value">0</div>
-                  </div>
-                  <div class="stat-card">
-                    <div class="stat-label">캐시 사용</div>
-                    <div id="cachedCount" class="stat-value">0</div>
-                  </div>
-                  <div class="stat-card">
-                    <div class="stat-label">배치 완료</div>
-                    <div id="batchCountText" class="stat-value">0</div>
-                  </div>
-                  <div class="stat-card">
-                    <div class="stat-label">진행 시간</div>
-                    <div id="elapsedTime" class="stat-value">0s</div>
-                  </div>
+                <div class="permission-actions">
+                  <button id="goToSettingsBtn" class="btn">설정으로 이동</button>
                 </div>
+              </div>
 
-                <div class="btn-group">
-                  <button id="translateAllBtn" class="btn">번역</button>
-                </div>
+              <!-- 번역 기능 (API Key 있을 때만 표시) -->
+              <div id="translateSection">
+                <div class="translation-shell">
+                  <div class="main-card translation-engine-card">
+                    <div class="translation-engine-header">
+                      <div>
+                        <div class="translation-engine-title-row">
+                          <h2 class="translation-engine-title">번역 엔진</h2>
+                          <span class="geo-tooltip-icon translation-tooltip-icon" tabindex="0" role="img" aria-label="초고속 번역은 API Key 없이 페이지를 빠르게 번역하고, AI 정밀 번역은 현재 선택한 프로바이더와 모델을 사용합니다. 선택 텍스트 번역 엔진은 설정 탭에서 따로 고를 수 있습니다." data-tooltip="초고속 번역은 API Key 없이 페이지를 빠르게 번역하고, AI 정밀 번역은 현재 선택한 프로바이더와 모델을 사용합니다. 선택 텍스트 번역 엔진은 설정 탭에서 따로 고를 수 있습니다.">?</span>
+                        </div>
+                      </div>
+                    </div>
 
-                <button id="restoreBtn" class="btn secondary" disabled>원본 보기</button>
+                    <div class="translation-engine-grid">
+                      <div class="translation-engine-field">
+                        <label for="translationProviderSelect">
+                          <span>프로바이더</span>
+                          <span class="geo-tooltip-icon translation-tooltip-icon" tabindex="0" role="img" aria-label="AI 정밀 번역에 사용할 AI 제공사를 고릅니다." data-tooltip="AI 정밀 번역에 사용할 AI 제공사를 고릅니다.">?</span>
+                        </label>
+                        <div class="translation-engine-select-wrap">
+                          <select id="translationProviderSelect" class="translation-engine-select"></select>
+                        </div>
+                      </div>
+                      <div class="translation-engine-field model-field">
+                        <label for="translationModelSelect">
+                          <span>모델</span>
+                          <span class="geo-tooltip-icon translation-tooltip-icon" tabindex="0" role="img" aria-label="선택한 프로바이더 안에서 AI 정밀 번역 품질과 속도를 결정하는 모델입니다." data-tooltip="선택한 프로바이더 안에서 AI 정밀 번역 품질과 속도를 결정하는 모델입니다.">?</span>
+                        </label>
+                        <div class="translation-engine-select-wrap">
+                          <select id="translationModelSelect" class="translation-engine-select"></select>
+                        </div>
+                      </div>
+                    </div>
 
-                <div id="batchInfo" class="batch-info" style="display: none;">
-                  <div class="batch-info-title">배치 진행 상황</div>
-                  <div id="batchList"></div>
-                </div>
+                    <div id="providerSummary" class="translation-engine-summary">
+                      <span class="translation-engine-summary-head">
+                        <span class="translation-engine-summary-label">번역 도움말</span>
+                        <span class="geo-tooltip-icon translation-tooltip-icon" tabindex="0" role="img" aria-label="초고속 번역은 API Key 없이 빠르게 동작하고, AI 정밀 번역은 선택한 프로바이더와 모델을 사용합니다." data-tooltip="초고속 번역은 API Key 없이 빠르게 동작하고, AI 정밀 번역은 선택한 프로바이더와 모델을 사용합니다.">?</span>
+                      </span>
+                    </div>
 
-                <!-- 캐시 정보 (현재 페이지) -->
-                <div id="cacheManagement" class="batch-info" style="display: none; margin-top: 16px;">
-                  <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;">
-                    <div class="batch-info-title" style="margin-bottom: 0;">현재 페이지 캐시</div>
-                    <button id="clearPageCacheBtn" class="icon-btn" title="캐시 삭제" aria-label="현재 페이지 캐시 삭제">
-                      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
-                        <path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/>
-                      </svg>
-                    </button>
+                    <div class="translation-action-grid">
+                      <button id="fastTranslateBtn" class="btn" title="API Key 없이 현재 페이지를 빠르게 읽을 수 있게 번역합니다.">초고속 번역</button>
+                      <button id="preciseTranslateBtn" class="btn secondary" title="선택한 프로바이더와 모델로 제목, 인용문, 경고문, 고유명사 보존을 더 우선해 번역합니다.">AI 정밀 번역</button>
+                    </div>
                   </div>
-                  <div style="padding: 8px 0; font-size: 13px; color: var(--text-secondary);">
-                    항목 수: <span id="pageItemCount" style="color: var(--text-primary); font-weight: 600;">0</span>개 /
-                    용량: <span id="pageSizeDisplay" style="color: var(--text-primary); font-weight: 600;">0 B</span>
+
+                  <div class="main-card translation-status-card">
+                    <div class="status-header">
+                      <span class="status-label">번역 진행 상태</span>
+                      <div style="display: flex; align-items: center; gap: 8px;">
+                        <span id="statusBadge" class="status-badge">대기 중</span>
+                      </div>
+                    </div>
+
+                    <div class="translation-status-overview">
+                      <div id="progressText" class="progress-text">번역 대기 중</div>
+                      <div id="phaseText" class="translation-phase">대기 중</div>
+                    </div>
+
+                    <div class="stats-grid translation-stats">
+                      <div class="stat-card">
+                        <div class="stat-label">번역된 세그먼트</div>
+                        <div id="translatedCount" class="stat-value">0</div>
+                      </div>
+                      <div class="stat-card">
+                        <div class="stat-label">캐시 적중</div>
+                        <div id="cachedCount" class="stat-value">0</div>
+                      </div>
+                      <div class="stat-card">
+                        <div class="stat-label">배치 완료</div>
+                        <div id="batchCountText" class="stat-value">0</div>
+                      </div>
+                      <div class="stat-card">
+                        <div class="stat-label">진행 시간</div>
+                        <div id="elapsedTime" class="stat-value">0s</div>
+                      </div>
+                    </div>
+
+                    <div id="batchInfo" class="batch-info" style="display: none;">
+                      <div class="batch-info-title">배치 진행 상황</div>
+                      <div id="batchList"></div>
+                    </div>
+
+                    <!-- 캐시 정보 (현재 페이지) -->
+                    <div id="cacheManagement" class="batch-info" style="display: none;">
+                      <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;">
+                        <div class="batch-info-title" style="margin-bottom: 0;">현재 페이지 캐시</div>
+                        <button id="clearPageCacheBtn" class="icon-btn" title="캐시 삭제" aria-label="현재 페이지 캐시 삭제">
+                          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
+                            <path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/>
+                          </svg>
+                        </button>
+                      </div>
+                      <div style="padding: 8px 0; font-size: 13px; color: var(--text-secondary);">
+                        항목 수: <span id="pageItemCount" style="color: var(--text-primary); font-weight: 600;">0</span>개 /
+                        용량: <span id="pageSizeDisplay" style="color: var(--text-primary); font-weight: 600;">0 B</span>
+                      </div>
+                    </div>
                   </div>
                 </div>
               </div>
             </div>
           </div>
-        </div>
 
-        <!-- 히스토리 탭 -->
-        <div id="historyTab" class="tab-content">
-          <div class="history-card">
-            <div class="history-header">
-              <div>
-                <div class="history-title">번역 히스토리</div>
-                <div class="history-subtitle">최근 번역한 페이지 목록입니다. 항목을 선택하면 동일한 조건으로 번역을 다시 실행합니다.</div>
+          <div id="translateHistoryPanel" class="translate-panel">
+            <div class="history-card">
+              <div class="history-header">
+                <div>
+                  <div class="history-title">번역 기록</div>
+                  <div class="history-subtitle">최근 번역한 페이지 목록입니다. 항목을 선택하면 동일한 조건으로 번역을 다시 실행합니다.</div>
+                </div>
+                <button id="historyClearBtn" class="history-clear-btn" type="button">전체 삭제</button>
               </div>
-              <button id="historyClearBtn" class="history-clear-btn" type="button">전체 삭제</button>
-            </div>
 
-            <div id="historyEmpty" class="history-empty" role="status">
-              <div class="history-empty-icon">🗒️</div>
-              <p>아직 저장된 번역 기록이 없습니다. 페이지를 번역하면 목록이 자동으로 채워집니다.</p>
-              <button id="historyEmptyAction" class="btn secondary" type="button">지금 번역 시작</button>
-            </div>
+              <div id="historyEmpty" class="history-empty" role="status">
+                <div class="history-empty-icon">🗒️</div>
+                <p>아직 저장된 번역 기록이 없습니다. 페이지를 번역하면 목록이 자동으로 채워집니다.</p>
+                <button id="historyEmptyAction" class="btn secondary" type="button">지금 번역 시작</button>
+              </div>
 
-            <div id="historyList" class="history-list" aria-live="polite"></div>
+              <div id="historyList" class="history-list" aria-live="polite"></div>
+            </div>
           </div>
         </div>
 
@@ -1929,14 +2529,14 @@
           </div>
         </div>
 
-        <!-- GEO 검사 탭 -->
+        <!-- SEO 검사 탭 -->
         <div id="geoTab" class="tab-content">
           <div class="main-card">
             <div class="status-header">
-              <span class="status-label">🔍 GEO 검사</span>
+              <span class="status-label">🔍 SEO 검사</span>
             </div>
             <p style="color: var(--text-secondary); font-size: 13px; margin-bottom: 16px;">
-              웹사이트의 SEO, AEO, GEO(생성 엔진 최적화) 상태를 검사합니다.
+              검색 노출과 AI 노출 요소를 함께 점검합니다.
             </p>
             <button id="geoRunAuditBtn" class="btn">검사 시작</button>
           </div>
@@ -2893,24 +3493,30 @@
         <div id="settingsTab" class="tab-content">
           <!-- API 설정 -->
           <div class="settings-section">
-            <div class="settings-title">API 설정</div>
+            <div class="settings-title">프로바이더 API Key</div>
 
             <div class="form-group">
-              <label for="apiKey">OpenRouter API Key</label>
-              <input type="password" id="apiKey" placeholder="sk-or-v1-...">
-              <div class="form-help">
-                API Key는 로컬에 안전하게 저장됩니다.
-                <a href="https://openrouter.ai/keys" target="_blank">키 발급받기 →</a>
+              <div class="form-group-header">
+                <label for="openRouterApiKey">OpenRouter API Key</label>
+                <a class="form-group-link" href="https://openrouter.ai/keys" target="_blank">키 발급받기 →</a>
               </div>
+              <input type="password" id="openRouterApiKey" placeholder="sk-or-v1-...">
             </div>
 
             <div class="form-group">
-              <label for="model">AI 모델</label>
-              <input type="text" id="model" placeholder="openai/gpt-4o-mini">
-              <div class="form-help">
-                비워두면 기본 모델(GPT-4o Mini) 사용.
-                <a href="https://openrouter.ai/models" target="_blank">모델 목록 보기 →</a>
+              <div class="form-group-header">
+                <label for="openAIApiKey">OpenAI API Key</label>
+                <a class="form-group-link" href="https://platform.openai.com/api-keys" target="_blank">키 발급받기 →</a>
               </div>
+              <input type="password" id="openAIApiKey" placeholder="sk-...">
+            </div>
+
+            <div class="form-group">
+              <div class="form-group-header">
+                <label for="geminiApiKey">Gemini API Key</label>
+                <a class="form-group-link" href="https://aistudio.google.com/app/apikey" target="_blank">키 발급받기 →</a>
+              </div>
+              <input type="password" id="geminiApiKey" placeholder="AIza...">
             </div>
           </div>
 
@@ -2918,68 +3524,59 @@
           <div class="settings-section">
             <div class="settings-title">번역 설정</div>
 
-            <div class="form-group">
-              <label>배치 크기</label>
-              <div class="inline-setting">
-                <label>한 번에 처리할 텍스트 개수</label>
-                <input type="number" id="batchSize" value="50" min="10" max="100">
+            <div class="settings-control-stack">
+              <div class="settings-control-card">
+                <div class="settings-control-row">
+                  <label for="autoTranslate" class="settings-control-label">
+                    <span>자동 번역</span>
+                    <span class="geo-tooltip-icon translation-tooltip-icon" tabindex="0" role="img" aria-label="기본값은 꺼짐입니다. 캐시가 있는 페이지를 다시 열었을 때만 자동으로 번역을 시작하고, 캐시가 없으면 수동으로 시작합니다." data-tooltip="기본값은 꺼짐입니다. 캐시가 있는 페이지를 다시 열었을 때만 자동으로 번역을 시작하고, 캐시가 없으면 수동으로 시작합니다.">?</span>
+                  </label>
+                  <label class="toggle-switch">
+                    <input type="checkbox" id="autoTranslate">
+                    <span class="toggle-slider"></span>
+                  </label>
+                </div>
               </div>
-              <div class="form-help">
-                기본값: 50개 (값이 클수록 API 호출이 줄어들지만 한 번에 더 오래 걸릴 수 있습니다)
-              </div>
-            </div>
 
-            <div class="form-group">
-              <label>동시 처리 개수</label>
-              <div class="inline-setting">
-                <label>동시에 처리할 배치 수</label>
-                <input type="number" id="concurrency" value="3" min="1" max="10">
+              <div class="settings-control-card">
+                <div class="settings-control-row">
+                  <label for="selectionTranslateEnabled" class="settings-control-label">
+                    <span>선택 텍스트 번역</span>
+                    <span class="geo-tooltip-icon translation-tooltip-icon" tabindex="0" role="img" aria-label="페이지에서 텍스트를 드래그하면 작은 번역 버튼과 선택 번역 팝오버를 켜거나 끕니다." data-tooltip="페이지에서 텍스트를 드래그하면 작은 번역 버튼과 선택 번역 팝오버를 켜거나 끕니다.">?</span>
+                  </label>
+                  <label class="toggle-switch">
+                    <input type="checkbox" id="selectionTranslateEnabled" checked>
+                    <span class="toggle-slider"></span>
+                  </label>
+                </div>
               </div>
-              <div class="form-help">
-                기본값: 3개 (값이 클수록 빠르지만 API 부하가 증가합니다)
-              </div>
-            </div>
 
-            <div class="form-group">
-              <div class="toggle-group">
-                <label for="autoTranslate">자동 번역</label>
-                <label class="toggle-switch">
-                  <input type="checkbox" id="autoTranslate" checked>
-                  <span class="toggle-slider"></span>
-                </label>
+              <div class="settings-control-card">
+                <div class="settings-control-row settings-select-row">
+                  <label for="selectionTranslateMode" class="settings-control-label">
+                    <span>선택 번역 엔진</span>
+                    <span class="geo-tooltip-icon translation-tooltip-icon" tabindex="0" role="img" aria-label="기본값은 초고속입니다. 필요할 때만 현재 패널의 AI 프로바이더와 모델을 선택 번역에 사용합니다." data-tooltip="기본값은 초고속입니다. 필요할 때만 현재 패널의 AI 프로바이더와 모델을 선택 번역에 사용합니다.">?</span>
+                  </label>
+                  <div class="translation-engine-select-wrap settings-select-wrap">
+                    <select id="selectionTranslateMode" class="translation-engine-select settings-compact-select">
+                      <option value="fast">초고속 (기본)</option>
+                      <option value="provider">현재 AI 설정</option>
+                    </select>
+                  </div>
+                </div>
               </div>
-              <div class="form-help">
-                ON: 캐싱된 페이지 방문 시 자동으로 번역 시작 | OFF: 수동으로 번역 버튼 클릭 필요
-              </div>
-            </div>
-          </div>
 
-          <!-- 디버그 설정 -->
-          <div class="settings-section">
-            <div class="settings-title">고급 (개발자용)</div>
-
-            <div class="form-group">
-              <div class="toggle-group">
-                <label for="debugLog">디버그 로그 (DEBUG)</label>
-                <label class="toggle-switch">
-                  <input type="checkbox" id="debugLog">
-                  <span class="toggle-slider"></span>
-                </label>
-              </div>
-              <div class="form-help">
-                ON: 모든 로그 출력 | OFF: 모든 로그 차단
-              </div>
-            </div>
-
-            <div class="form-group">
-              <label>개발자 도구</label>
-              <div style="display: flex; gap: 8px; flex-direction: column;">
-                <button id="copyAllLogsBtn" class="btn secondary">전체 로그 복사</button>
-                <button id="copyErrorLogsBtn" class="btn secondary">오류 로그만 복사</button>
-              </div>
-              <div class="form-help">
-                전체 로그: 최근 500개 모든 로그를 복사 (이슈 리포트용)<br>
-                오류 로그: ERROR, WARN 레벨만 복사 (디버깅용)
+              <div class="settings-control-card">
+                <div class="settings-control-row">
+                  <div class="settings-control-label">
+                    <span>사이드패널 단축키</span>
+                    <span class="geo-tooltip-icon translation-tooltip-icon" tabindex="0" role="img" aria-label="추천값은 Ctrl+Shift+Y입니다. 변경 버튼을 누르면 크롬 단축키 설정 화면으로 이동하고, 다시 누르면 패널이 닫히는 토글 방식입니다." data-tooltip="추천값은 Ctrl+Shift+Y입니다. 변경 버튼을 누르면 크롬 단축키 설정 화면으로 이동하고, 다시 누르면 패널이 닫히는 토글 방식입니다.">?</span>
+                  </div>
+                  <div class="settings-shortcut-actions">
+                    <span id="sidePanelShortcutValue" class="settings-shortcut-value">Ctrl+Shift+Y</span>
+                    <button id="openShortcutSettingsBtn" type="button" class="btn secondary settings-inline-btn">변경</button>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
@@ -3000,18 +3597,11 @@
 
     <!-- 우측 세로 탭바 -->
     <nav class="vertical-tabbar" role="tablist">
-      <button role="tab" data-tab="translate" aria-selected="true" title="AI 번역">
+      <button role="tab" data-tab="translate" aria-selected="true" title="번역">
         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
           <path d="M12.87 15.07l-2.54-2.51.03-.03A17.52 17.52 0 0014.07 6H17V4h-7V2H8v2H1v2h11.17C11.5 7.92 10.44 9.75 9 11.35 8.07 10.32 7.3 9.19 6.69 8h-2c.73 1.63 1.73 3.17 2.98 4.56l-5.09 5.02L4 19l5-5 3.11 3.11.76-2.04zM18.5 10h-2L12 22h2l1.12-3h4.75L21 22h2l-4.5-12zm-2.62 7l1.62-4.33L19.12 17h-3.24z"/>
         </svg>
-        <span>AI 번역</span>
-      </button>
-
-      <button role="tab" data-tab="history" aria-selected="false" title="히스토리">
-        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
-          <path d="M13 3a9 9 0 00-9 9H1l3.89 3.89.07.14L9 12H6a7 7 0 117 7 6.93 6.93 0 01-4.9-2H7.62A9 9 0 1013 3zm-1 5v5l4.28 2.54.72-1.21-3.5-2.08V8z"/>
-        </svg>
-        <span>히스토리</span>
+        <span>번역</span>
       </button>
 
       <button role="tab" data-tab="quickTranslate" aria-selected="false" title="텍스트 번역">
@@ -3030,11 +3620,11 @@
         <span>검색</span>
       </button>
 
-      <button role="tab" data-tab="geo" aria-selected="false" title="GEO 검사">
+      <button role="tab" data-tab="geo" aria-selected="false" title="SEO 검사">
         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
           <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/>
         </svg>
-        <span>GEO 검사</span>
+        <span>SEO 검사</span>
       </button>
 
       <button role="tab" data-tab="recurring" aria-selected="false" title="반복관리">

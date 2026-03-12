@@ -12,6 +12,7 @@ import { logInfo, logError, initLogger } from './logger.js';
 import * as State from './modules/state.js';
 import {
   initTabbar,
+  initTranslateSubtabs,
   restoreSession,
   handleDeepLink,
   initExternalLinks,
@@ -24,7 +25,7 @@ import { initQuickTranslateTab } from './modules/quick-translate.js';
 import { initRecurringTab } from './modules/recurring.js';
 import { initGeoTab } from './modules/geo-tab.js';
 import { initTooltipHandlers } from './modules/geo-ui.js';
-import { handleTabChange, getSupportType } from './modules/translation.js';
+import { handleTabChange, getSupportType, initTranslationTab } from './modules/translation.js';
 
 // ===== 초기화 =====
 
@@ -45,6 +46,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // 탭바 초기화
     initTabbar();
+    initTranslateSubtabs();
     initExternalLinks();
 
     // GitHub 링크 버튼은 initExternalLinks에서 바인딩됨 (중복 방지)
@@ -52,6 +54,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     // 설정 탭 초기화
     initSettingsTab();
     await loadSettings();
+
+    // 번역 탭 초기화
+    await initTranslationTab();
 
     // 히스토리 탭 초기화
     await initHistoryTab();
@@ -77,11 +82,6 @@ document.addEventListener('DOMContentLoaded', async () => {
       State.setCurrentTabId(tab.id);
       await handleTabChange(tab);
     }
-
-    // 번역 탭 버튼 이벤트
-    const { handleTranslateAll, handleRestore } = await import('./modules/translation.js');
-    document.getElementById('translateAllBtn')?.addEventListener('click', () => handleTranslateAll(true));
-    document.getElementById('restoreBtn')?.addEventListener('click', handleRestore);
 
     // 권한 요청 버튼
     const { handleRequestPermission } = await import('./modules/translation.js');

@@ -29,6 +29,7 @@ env/
 
 # Logs
 *.log
+.env.providers.local
 
 # Temporary files
 *.tmp

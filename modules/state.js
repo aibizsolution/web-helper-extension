@@ -81,14 +81,25 @@ export const autoTranslateTriggeredByTab = new Map();
  * @type {object}
  */
 export let translationState = {
-  state: 'inactive',              // 번역 상태: 'inactive' | 'translating' | 'completed' | 'restored'
-  totalTexts: 0,                  // 전체 텍스트 수
-  translatedCount: 0,             // 번역 완료 수
+  state: 'inactive',              // inactive | analyzing | translating | completed | restored | error
+  phase: 'idle',                  // idle | analyzing | visible | full | completed
+  priority: 0,                    // 현재 우선순위
+  totalSegments: 0,               // 전체 세그먼트 수
+  visibleSegments: 0,             // 우선 표시 세그먼트 수
+  translatedSegments: 0,          // 번역 완료 세그먼트 수
+  totalTexts: 0,                  // 레거시 호환용
+  translatedCount: 0,             // 레거시 호환용
   cachedCount: 0,                 // 캐시 사용 수
+  cacheHits: 0,                   // 캐시 적중 수
   batchCount: 0,                  // 전체 배치 수
   batchesDone: 0,                 // 완료 배치 수
   batches: [],                    // 배치 상세 정보
+  activeRequests: 0,              // 현재 활성 요청 수
+  etaMs: 0,                       // 예상 남은 시간
   activeMs: 0,                    // 경과 시간 (ms)
+  provider: '',                   // 활성 프로바이더
+  model: '',                      // 활성 모델
+  profile: 'fast',                // fast | precise
   originalTitle: '',              // 번역 전 제목
   translatedTitle: '',            // 번역 후 제목
   previewText: ''                 // 번역 프리뷰 텍스트
@@ -195,13 +206,24 @@ export function setTranslationState(newState) {
 export function createDefaultTranslationState() {
   return {
     state: 'inactive',
+    phase: 'idle',
+    priority: 0,
+    totalSegments: 0,
+    visibleSegments: 0,
+    translatedSegments: 0,
     totalTexts: 0,
     translatedCount: 0,
     cachedCount: 0,
+    cacheHits: 0,
     batchCount: 0,
     batchesDone: 0,
     batches: [],
+    activeRequests: 0,
+    etaMs: 0,
     activeMs: 0,
+    provider: '',
+    model: '',
+    profile: 'fast',
     originalTitle: '',
     translatedTitle: '',
     previewText: ''

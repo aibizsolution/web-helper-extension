@@ -17,7 +17,7 @@ import {
   setLastHistoryCompletionMeta,
   setLastTranslateMode
 } from './state.js';
-import { showToast, switchTab } from './ui-utils.js';
+import { showToast, switchTab, switchTranslateSubtab } from './ui-utils.js';
 
 // ===== 상수 =====
 const HISTORY_STORAGE_KEY = 'translationHistory';
@@ -75,8 +75,9 @@ export async function initHistoryTab() {
 
   const emptyActionBtn = document.getElementById('historyEmptyAction');
   if (emptyActionBtn) {
-    emptyActionBtn.addEventListener('click', () => {
-      switchTab('translate');
+    emptyActionBtn.addEventListener('click', async () => {
+      await switchTab('translate');
+      await switchTranslateSubtab('page');
     });
   }
 
@@ -341,8 +342,12 @@ async function clearHistory(event) {
  * @returns {boolean} 히스토리 탭 활성 상태
  */
 function isHistoryTabActive() {
-  const historyTab = document.getElementById('historyTab');
-  return historyTab ? historyTab.classList.contains('active') : false;
+  const translateTab = document.getElementById('translateTab');
+  const historyPanel = document.getElementById('translateHistoryPanel');
+  return Boolean(
+    translateTab?.classList.contains('active')
+    && historyPanel?.classList.contains('active')
+  );
 }
 
 /**
@@ -389,14 +394,15 @@ export async function handleHistoryItemOpen(entry) {
       });
     }
 
-    setLastTranslateMode(entry.mode === 'fresh' ? 'fresh' : 'cache');
+    setLastTranslateMode(entry.mode === 'fresh' || entry.mode === 'precise' ? 'fresh' : 'fast');
     // 탭별 모드도 설정 (완료 후 히스토리 저장 시 올바른 모드 사용)
     translateModeByTab.set(newTab.id, lastTranslateMode);
 
     // 번역 탭으로 자동 전환
     await switchTab('translate');
+    await switchTranslateSubtab('page');
 
-    await handleTranslateAll(entry.mode !== 'fresh');
+    await handleTranslateAll(!(entry.mode === 'fresh' || entry.mode === 'precise'));
   } catch (error) {
     logError('sidepanel', 'HISTORY_OPEN_ERROR', '히스토리 항목 실행 실패', { url: entry.url }, error);
     showToast('히스토리 항목을 여는 중 문제가 발생했습니다.', 'error');
@@ -458,10 +464,10 @@ function formatHistoryTime(isoString) {
  * @returns {string} 한글 라벨
  */
 function formatHistoryMode(mode) {
-  if (mode === 'fresh') {
-    return '새로 번역';
+  if (mode === 'fresh' || mode === 'precise') {
+    return 'AI 정밀 번역';
   }
-  return '빠른 모드';
+  return '초고속 번역';
 }
 
 /**

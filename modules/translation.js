@@ -2,14 +2,13 @@
  * Side Panel 번역 핵심 로직
  *
  * 역할:
- * - 번역 실행 (캐시 모드 / 전면 재번역)
- * - 권한 관리 (http/https/file:// 지원 확인)
- * - Content Script 통신 (Port)
- * - 탭별 상태 관리
- * - 원본 복원
+ * - V2 페이지 번역 시작/복원
+ * - 번역 탭 상단 provider/model 설정 관리
+ * - 권한 및 content script 준비 확인
+ * - Port 기반 진행 상태 동기화
  */
 
-import { logInfo, logWarn, logError, logDebug } from '../logger.js';
+import { logInfo, logDebug, logError } from '../logger.js';
 import { ACTIONS, PORT_MESSAGES, PORT_NAMES } from './constants.js';
 import {
   currentTabId,
@@ -26,762 +25,574 @@ import {
   setPortForTab,
   removePortForTab
 } from './state.js';
-import { updateUI, resetTranslateUI, showToast, updateErrorLogCount } from './ui-utils.js';
+import { updateUI, resetTranslateUI, showToast, ensurePageContentScript } from './ui-utils.js';
 import { handleTranslationCompletedForHistory } from './history.js';
+import { updateApiKeyUI, updatePageCacheStatus } from './settings.js';
+import {
+  DEFAULT_PROFILE,
+  FAST_PAGE_ENGINE_LABEL,
+  FAST_PAGE_MODEL,
+  FAST_PAGE_PROVIDER,
+  PROVIDER_CATALOG,
+  getDefaultModelForProvider
+} from './provider-catalog.js';
+import { getActiveTranslationConfig, getConfiguredProviders, updateActiveTranslationConfig } from './storage.js';
 
-// ===== 상수 =====
-const DEFAULT_MODEL = 'openai/gpt-4o-mini';
-
-// ===== URL 지원 확인 =====
+const EXPECTED_CONTENT_RUNTIME_VERSION = '2026-03-12-content-v3';
+const CONTENT_SCRIPT_FILES = [
+  'content/bootstrap.js',
+  'content/api.js',
+  'content/provider.js',
+  'content/cache.js',
+  'content/industry.js',
+  'content/dom.js',
+  'content/title.js',
+  'content/progress.js',
+  'content/selection.js',
+  'content.js'
+];
 
 /**
- * URL 지원 타입 확인
- * @param {string} url - 확인할 URL
- * @returns {'requestable' | 'file' | 'unsupported'}
+ * 번역 탭 상단 컨트롤 초기화
  */
-export function getSupportType(url) {
-  try {
-    const u = new URL(url);
-    // Chrome에서 강제 차단되는 특수 도메인(웹스토어 등)은 예외 처리
-    const denied = (
-      u.hostname === 'chromewebstore.google.com' ||
-      (u.hostname === 'chrome.google.com' && u.pathname.startsWith('/webstore'))
-    );
-    if ((u.protocol === 'http:' || u.protocol === 'https:') && !denied) {
-      return 'requestable';
-    }
-    if (u.protocol === 'file:') {
-      return 'file';
-    }
-    return 'unsupported';
-  } catch (e) {
-    return 'unsupported';
+export async function initTranslationTab() {
+  bindTranslationActionButtons();
+  bindTranslationConfigControls();
+  await syncTranslationConfigControls();
+  await updateApiKeyUI();
+  updateTranslationConfigSummary();
+}
+
+function bindTranslationActionButtons() {
+  document.getElementById('fastTranslateBtn')?.addEventListener('click', () => handleTranslationAction('fast'));
+  document.getElementById('preciseTranslateBtn')?.addEventListener('click', () => handleTranslationAction('precise'));
+}
+
+function isRestoreToggleState(profile) {
+  const currentProfile = translationState.profile === 'precise' ? 'precise' : 'fast';
+  if (currentProfile !== profile) {
+    return false;
   }
+
+  return ['analyzing', 'translating', 'completed', 'error'].includes(translationState.state);
 }
 
-/**
- * 번역 상태 초기화 (권한 없거나 번역 미완료 페이지)
- */
-export function initializeTranslationState() {
-  translationState.state = 'inactive';
-  translationState.totalTexts = 0;
-  translationState.translatedCount = 0;
-  translationState.cachedCount = 0;
-  translationState.batchCount = 0;
-  translationState.batchesDone = 0;
-  translationState.batches = [];
-  translationState.activeMs = 0;
-}
-
-// ===== 탭 변경 처리 =====
-
-/**
- * 탭 변경 시 처리 (이동, 새로고침 등 모든 경우)
- * @param {object} tab - 탭 객체
- */
-export async function handleTabChange(tab) {
-  const fromId = currentTabId;
-  // 번역 중이고 탭 ID가 같으면 무시 (같은 탭에서 계속 진행)
-  if (translationState.state === 'translating' && tab && tab.id === currentTabId) {
+async function handleTranslationAction(profile) {
+  if (isRestoreToggleState(profile)) {
+    await handleRestore();
     return;
   }
 
-  // 이전 탭의 번역 상태 저장 (다른 탭으로 이동할 때)
-  if (translationState.state === 'translating') {
+  await handleStartPageTranslation(profile);
+}
+
+function bindTranslationConfigControls() {
+  const providerSelect = document.getElementById('translationProviderSelect');
+  const modelSelect = document.getElementById('translationModelSelect');
+
+  providerSelect?.addEventListener('change', async () => {
+    const provider = providerSelect.value;
+    populateModelSelect(provider, getDefaultModelForProvider(provider));
+    const currentConfig = await getActiveTranslationConfig();
+    await updateActiveTranslationConfig({
+      provider,
+      model: document.getElementById('translationModelSelect')?.value || getDefaultModelForProvider(provider),
+      profile: currentConfig.profile || DEFAULT_PROFILE
+    });
+    await updateApiKeyUI();
+    updateTranslationConfigSummary();
+  });
+
+  modelSelect?.addEventListener('change', async () => {
+    const currentConfig = await getActiveTranslationConfig();
+    await updateActiveTranslationConfig({
+      provider: document.getElementById('translationProviderSelect')?.value,
+      model: modelSelect.value,
+      profile: currentConfig.profile || DEFAULT_PROFILE
+    });
+    updateTranslationConfigSummary();
+  });
+}
+
+async function syncTranslationConfigControls() {
+  const config = await getActiveTranslationConfig();
+  const providerSelect = document.getElementById('translationProviderSelect');
+  const modelSelect = document.getElementById('translationModelSelect');
+  const configuredProviders = await getConfiguredProviders();
+
+  if (!providerSelect || !modelSelect) {
+    return;
+  }
+
+  if (configuredProviders.length === 0) {
+    providerSelect.innerHTML = '<option value="">API Key 입력 필요</option>';
+    providerSelect.disabled = true;
+    modelSelect.innerHTML = '<option value="">설정에서 프로바이더 API Key 입력</option>';
+    modelSelect.disabled = true;
+    updateTranslationConfigSummary();
+    return;
+  }
+
+  providerSelect.disabled = false;
+  modelSelect.disabled = false;
+  providerSelect.innerHTML = configuredProviders
+    .map((provider) => `<option value="${provider.id}">${provider.label}</option>`)
+    .join('');
+
+  const resolvedProvider = configuredProviders.some((provider) => provider.id === config.provider)
+    ? config.provider
+    : configuredProviders[0].id;
+
+  if (resolvedProvider !== config.provider) {
+    await updateActiveTranslationConfig({
+      provider: resolvedProvider,
+      model: getDefaultModelForProvider(resolvedProvider),
+      profile: config.profile || DEFAULT_PROFILE
+    });
+  }
+
+  providerSelect.value = resolvedProvider;
+  populateModelSelect(resolvedProvider, resolvedProvider === config.provider ? config.model : getDefaultModelForProvider(resolvedProvider));
+
+  updateTranslationConfigSummary();
+}
+
+function populateModelSelect(providerId, selectedModel) {
+  const modelSelect = document.getElementById('translationModelSelect');
+  if (!modelSelect) {
+    return;
+  }
+
+  const catalog = PROVIDER_CATALOG[providerId] || PROVIDER_CATALOG.openrouter;
+  modelSelect.innerHTML = catalog.models
+    .map((model) => `<option value="${model.id}">${model.label}</option>`)
+    .join('');
+
+  modelSelect.value = selectedModel && catalog.models.some((model) => model.id === selectedModel)
+    ? selectedModel
+    : catalog.defaultModel;
+}
+
+function escapeHtml(value) {
+  return String(value || '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+function renderTooltipIcon(text) {
+  return `<span class="geo-tooltip-icon translation-tooltip-icon" tabindex="0" role="img" aria-label="${escapeHtml(text)}" data-tooltip="${escapeHtml(text)}">?</span>`;
+}
+
+function updateTranslationConfigSummary() {
+  const summaryEl = document.getElementById('providerSummary');
+  if (!summaryEl) {
+    return;
+  }
+
+  const providerSelect = document.getElementById('translationProviderSelect');
+  const modelSelect = document.getElementById('translationModelSelect');
+  const provider = providerSelect?.value || 'openrouter';
+  const model = modelSelect?.value || getDefaultModelForProvider(provider);
+  const providerCatalog = PROVIDER_CATALOG[provider] || PROVIDER_CATALOG.openrouter;
+  const modelLabel = providerCatalog.models.find((item) => item.id === model)?.label || model;
+  const translateSection = document.getElementById('translateSection');
+  const hasApiKey = translateSection?.dataset.hasApiKey === 'true';
+
+  if (providerSelect?.disabled) {
+    summaryEl.style.display = 'flex';
+    summaryEl.innerHTML = [
+      '<span class="translation-engine-summary-head">',
+      '<span class="translation-engine-summary-label">번역 도움말</span>',
+      renderTooltipIcon('초고속 번역은 바로 사용할 수 있고, AI 정밀 번역은 설정 탭에서 프로바이더 API Key를 입력한 뒤 사용할 수 있습니다.'),
+      '</span>',
+      '<span class="translation-engine-inline-note">설정에서 API Key 입력 필요</span>'
+    ].join('');
+    return;
+  }
+
+  const summaryTooltip = [
+    `초고속 번역은 ${FAST_PAGE_ENGINE_LABEL}(${FAST_PAGE_MODEL})로 API Key 없이 페이지를 빠르게 번역합니다.`,
+    `AI 정밀 번역은 ${providerCatalog.label} ${modelLabel}을 사용하며, 제목/인용문/경고문/고유명사 보존을 더 우선합니다.`,
+    hasApiKey
+      ? '선택 텍스트 번역 엔진은 설정 탭에서 초고속 또는 현재 AI provider로 따로 고를 수 있습니다.'
+      : '설정 탭에서 프로바이더 API Key를 입력하면 AI 정밀 번역을 쓸 수 있고, 선택 번역은 설정 탭에서 초고속/AI 중 고를 수 있습니다.'
+  ].join('\n');
+
+  if (hasApiKey) {
+    summaryEl.innerHTML = '';
+    summaryEl.style.display = 'none';
+    return;
+  }
+
+  summaryEl.style.display = 'flex';
+
+  summaryEl.innerHTML = [
+    '<span class="translation-engine-summary-head">',
+    '<span class="translation-engine-summary-label">번역 도움말</span>',
+    renderTooltipIcon(summaryTooltip),
+    '</span>',
+    hasApiKey
+      ? ''
+      : `<span class="translation-engine-inline-note">${escapeHtml(providerCatalog.label)} API Key 필요</span>`
+  ].join('');
+}
+
+export function getSupportType(url) {
+  try {
+    const parsedUrl = new URL(url);
+    const denied = parsedUrl.hostname === 'chromewebstore.google.com'
+      || (parsedUrl.hostname === 'chrome.google.com' && parsedUrl.pathname.startsWith('/webstore'));
+
+    if ((parsedUrl.protocol === 'http:' || parsedUrl.protocol === 'https:') && !denied) {
+      return 'requestable';
+    }
+    if (parsedUrl.protocol === 'file:') {
+      return 'file';
+    }
+    return 'unsupported';
+  } catch (_) {
+    return 'unsupported';
+  }
+}
+
+export function initializeTranslationState() {
+  setTranslationState(createDefaultTranslationState());
+}
+
+export async function handleTabChange(tab) {
+  const fromId = currentTabId;
+  if (translationState.state === 'translating' && tab?.id === currentTabId) {
+    return;
+  }
+
+  if (translationState.state === 'translating' && currentTabId) {
     translationStateByTab.set(currentTabId, { ...translationState, batches: [...translationState.batches] });
   }
 
-  // 0단계: 현재 탭 ID 업데이트
-  const previousTabId = currentTabId;
-  if (tab && tab.id) {
+  if (tab?.id) {
     setCurrentTabId(tab.id);
   }
 
-  // 1단계: 포트 관리
-  // - 이전 탭이 번역 중이 아니면 포트 정리 (노이즈 감소)
-  // - 번역 중이면 유지 (CLAUDE.md 권고)
   if (fromId && fromId !== currentTabId && translationState.state !== 'translating') {
     removePortForTab(fromId, { disconnect: true });
   }
 
-  // 2단계: 새 탭의 저장된 상태 복구 정책
-  // - translating 또는 completed 상태는 복구
-  // - restored 등 기타 상태는 초기 UI 유지
-  if (currentTabId && translationStateByTab.has(currentTabId)) {
-    const savedState = translationStateByTab.get(currentTabId);
-    if (savedState && (savedState.state === 'translating' || savedState.state === 'completed')) {
-      setTranslationState({
-        ...savedState,
-        batches: savedState.batches ? [...savedState.batches] : []
-      });
-    } else {
-      initializeTranslationState();
-    }
+  const savedState = currentTabId ? translationStateByTab.get(currentTabId) : null;
+  if (savedState && (savedState.state === 'translating' || savedState.state === 'completed' || savedState.state === 'restored')) {
+    setTranslationState({ ...savedState, batches: [...(savedState.batches || [])] });
   } else {
-    // 저장된 상태가 없으면 초기화
     initializeTranslationState();
   }
 
-  // 3단계: 권한 확인만 (번역 상태 조회 안 함 - URL 기반 복구 방지)
   if (tab) {
     await checkPermissions(tab);
   }
 
-  // 4단계: 번역 탭이 활성화되어 있으면 UI 업데이트
+  await syncTranslationConfigControls();
+  await updateApiKeyUI();
+  updateTranslationConfigSummary();
   updateUIByPermission();
 
-  logDebug('sidepanel', 'TAB_SWITCH', '탭 전환 처리', { from: fromId, to: currentTabId, state: translationState.state });
-
-  // 5단계: 새 탭이 번역 중 상태라면 포트 보장 (업데이트 수신)
-  if (translationState.state === 'translating' && !getPortForTab(currentTabId)) {
+  if (translationState.state === 'translating' && currentTabId && !getPortForTab(currentTabId)) {
     connectToContentScript(currentTabId);
   }
 
-  // 6단계: 자동 번역 체크 (조건이 맞으면 번역 버튼 트리거)
-  // - 권한이 있고, 번역이 아직 시작되지 않았을 때만 (inactive)
-  // - 이미 자동 번역이 실행되지 않았을 때만
-  // - completed나 restored 상태에서는 자동 번역 안 함 (중복 실행 방지)
   if (permissionGranted && !autoTranslateTriggeredByTab.get(currentTabId) && translationState.state === 'inactive') {
-    // 비동기로 자동 번역 체크 (UI 블로킹 방지)
-    setTimeout(() => checkAutoTranslate(), 300);
+    setTimeout(() => {
+      void checkAutoTranslate();
+    }, 250);
   }
 }
 
-/**
- * 자동 번역 조건 체크 및 실행
- * 조건:
- * - autoTranslate 설정이 ON
- * - API Key가 설정되어 있음
- * - 캐싱된 데이터가 존재
- */
 async function checkAutoTranslate() {
   if (!currentTabId || !permissionGranted) {
     return;
   }
-
-  // 이미 자동 번역이 실행되었으면 스킵
   if (autoTranslateTriggeredByTab.get(currentTabId)) {
     return;
   }
 
-  try {
-    // 1. 설정 확인
-    const settings = await chrome.storage.local.get(['autoTranslate', 'apiKey']);
-
-    if (!settings.autoTranslate) {
-      logDebug('sidepanel', 'AUTO_TRANSLATE_SKIP', '자동 번역 설정이 OFF', { autoTranslate: false });
-      return;
-    }
-
-    if (!settings.apiKey) {
-      logDebug('sidepanel', 'AUTO_TRANSLATE_SKIP', 'API Key가 없음', { hasApiKey: false });
-      return;
-    }
-
-    // 2. 캐시 데이터 확인
-    const hasCached = await checkHasCachedData();
-
-    if (!hasCached) {
-      logDebug('sidepanel', 'AUTO_TRANSLATE_SKIP', '캐싱된 데이터가 없음', { hasCached: false });
-      return;
-    }
-
-    // 3. 자동 번역 실행 플래그 설정 (중복 실행 방지)
-    autoTranslateTriggeredByTab.set(currentTabId, true);
-
-    logInfo('sidepanel', 'AUTO_TRANSLATE_TRIGGER', '자동 번역 트리거', {
-      tabId: currentTabId,
-      hasCached: true,
-      autoTranslate: true
-    });
-
-    // 4. 번역 버튼 클릭 시뮬레이션 (캐시 모드)
-    await handleTranslateAll(true);
-
-  } catch (error) {
-    logError('sidepanel', 'AUTO_TRANSLATE_ERROR', '자동 번역 체크 실패', { tabId: currentTabId }, error);
+  const config = await getActiveTranslationConfig();
+  if (!config.autoTranslate) {
+    return;
   }
+
+  if (config.profile === 'precise' && !config.hasApiKey) {
+    return;
+  }
+
+  const hasCached = await checkHasCachedData();
+  if (!hasCached) {
+    return;
+  }
+
+  autoTranslateTriggeredByTab.set(currentTabId, true);
+  await handleStartPageTranslation(config.profile || DEFAULT_PROFILE);
 }
 
-/**
- * 캐시 데이터 존재 여부 확인
- * @returns {Promise<boolean>}
- */
 async function checkHasCachedData() {
   if (!currentTabId) {
     return false;
   }
 
   try {
-    // Content script에 캐시 상태 조회
-    return new Promise((resolve) => {
-      chrome.tabs.sendMessage(
-        currentTabId,
-        { action: 'getCacheStatus' },
-        (response) => {
-          if (chrome.runtime.lastError) {
-            logDebug('sidepanel', 'AUTO_TRANSLATE_CACHE_CHECK_ERROR', 'Content script와 통신 실패', {
-              error: chrome.runtime.lastError.message
-            });
-            resolve(false);
-            return;
-          }
-
-          if (response && response.success && response.count > 0) {
-            logDebug('sidepanel', 'AUTO_TRANSLATE_CACHE_CHECK_SUCCESS', '캐시 데이터 확인', {
-              count: response.count
-            });
-            resolve(true);
-          } else {
-            resolve(false);
-          }
-        }
-      );
-    });
-  } catch (error) {
-    logError('sidepanel', 'AUTO_TRANSLATE_CACHE_CHECK_ERROR', '캐시 확인 실패', { tabId: currentTabId }, error);
+    const response = await chrome.tabs.sendMessage(currentTabId, { action: ACTIONS.GET_CACHE_STATUS });
+    return Boolean(response?.success && response.count > 0);
+  } catch (_) {
     return false;
   }
 }
 
-/**
- * 권한 상태에 따라 UI 업데이트 (탭 이동 시 호출)
- */
 function updateUIByPermission() {
-  const activeTab = document.querySelector('.tab-content.active');
-  const isTranslateTabActive = activeTab && activeTab.id === 'translateTab';
-
-  // 번역 탭이 활성화되어 있을 때만 UI 업데이트
-  if (!isTranslateTabActive) {
-    return;
-  }
-
-  // 권한 없으면 상태를 초기화
-  if (!permissionGranted) {
-    translationState.state = 'inactive';
-    translationState.totalTexts = 0;
-    translationState.translatedCount = 0;
-    translationState.cachedCount = 0;
-    translationState.batchCount = 0;
-    translationState.batchesDone = 0;
-    translationState.batches = [];
-    translationState.activeMs = 0;
-
-    // 캐시 정보 섹션 숨기기
-    const cacheManagement = document.getElementById('cacheManagement');
-    if (cacheManagement) {
-      cacheManagement.style.display = 'none';
-    }
-  } else {
-    // 권한 있으면 캐시 정보 섹션 표시
-    const cacheManagement = document.getElementById('cacheManagement');
-    if (cacheManagement) {
-      cacheManagement.style.display = 'block';
-    }
-  }
-
-  // 상태에 따라 UI 렌더링 (권한 상태도 포함)
   updateUI(permissionGranted);
 }
 
-/**
- * 권한 확인 (탭 전환/새 탭 시 호출)
- * @param {object} tab - 탭 객체
- */
 export async function checkPermissions(tab) {
-  if (!tab || !tab.url) {
+  if (!tab?.url) {
     setPermissionGranted(false);
     return;
   }
 
   const supportType = getSupportType(tab.url);
-
-  // 지원 불가 스킴 - 권한 없음
   if (supportType === 'unsupported') {
     setPermissionGranted(false);
     return;
   }
 
-  // file:// 스킴
   if (supportType === 'file') {
     try {
       const url = new URL(tab.url);
       const origin = `${url.protocol}//${url.host}/*`;
-      const hasPermission = await chrome.permissions.contains({
-        origins: [origin]
-      });
+      const hasPermission = await chrome.permissions.contains({ origins: [origin] });
       setPermissionGranted(hasPermission);
-    } catch (error) {
+    } catch (_) {
       setPermissionGranted(false);
     }
     return;
   }
 
-  // http/https 스킴 - 권한 있음
   setPermissionGranted(true);
-
-  // 번역 탭에서는 캐시 상태도 업데이트
-  const { updatePageCacheStatus } = await import('./settings.js');
-  const activeTab = document.querySelector('.tab-content.active');
-  if (activeTab && activeTab.id === 'translateTab') {
-    try {
-      await updatePageCacheStatus();
-    } catch (error) {
-      // 캐시 상태 조회 실패는 무시
-    }
-  }
+  await updatePageCacheStatus();
 }
 
-/**
- * 권한 요청 핸들러 (file:// URL 전용)
- */
 export async function handleRequestPermission() {
-  if (!currentTabId) return;
+  if (!currentTabId) {
+    return;
+  }
 
   try {
     const tab = await chrome.tabs.get(currentTabId);
     const url = new URL(tab.url);
     const origin = `${url.protocol}//${url.host}/*`;
+    const granted = await chrome.permissions.request({ origins: [origin] });
 
-    // 권한 요청
-    const granted = await chrome.permissions.request({
-      origins: [origin]
+    if (!granted) {
+      showToast('권한이 거부되었습니다.', 'error');
+      return;
+    }
+
+    await chrome.scripting.executeScript({
+      target: { tabId: currentTabId },
+      files: CONTENT_SCRIPT_FILES
     });
 
-    if (granted) {
-      // Content script 주입
-      await chrome.scripting.executeScript({
-        target: { tabId: currentTabId },
-        files: ['content/bootstrap.js', 'content/api.js', 'content/cache.js', 'content/industry.js', 'content/dom.js', 'content/title.js', 'content/progress.js', 'content.js']
-      });
-
-      // 잠시 대기
-      await new Promise(resolve => setTimeout(resolve, 100));
-
-      // 권한 UI 업데이트
-      await checkPermissions(tab);
-      showToast('권한이 허용되었습니다!');
-    } else {
-      showToast('권한이 거부되었습니다.', 'error');
-    }
+    await new Promise((resolve) => setTimeout(resolve, 120));
+    await checkPermissions(tab);
+    showToast('권한이 허용되었습니다!');
   } catch (error) {
     logError('sidepanel', 'PERMISSION_REQUEST_FAILED', '권한 요청 실패', {}, error);
     showToast('권한 요청 중 오류가 발생했습니다.', 'error');
   }
 }
 
-/**
- * Content script 준비 확인 (재시도 로직 강화)
- * @param {number} tabId - 대상 탭 ID
- * @param {number} maxRetries - 최대 재시도 횟수 (기본 5)
- * @returns {Promise<boolean>} 준비 완료 여부
- */
-async function ensureContentScriptReady(tabId, maxRetries = 5) {
-  // 1단계: 이미 준비되어 있는지 확인
+async function ensureContentScriptReady(tabId) {
   try {
-    await chrome.tabs.sendMessage(tabId, { action: ACTIONS.GET_TRANSLATION_STATE });
-    logDebug('sidepanel', 'CONTENT_READY_CHECK', 'Content script 이미 준비됨', { tabId });
-    try {
-      await chrome.scripting.executeScript({
-        target: { tabId },
-        files: ['content/bootstrap.js', 'content/progress.js']
-      });
-      logDebug('sidepanel', 'CONTENT_READY_PATCH', '부트스트랩/프로그레스 주입 완료', { tabId });
-    } catch (e) {
-      logDebug('sidepanel', 'CONTENT_READY_PATCH_FAIL', '보조 주입 실패(무시 가능)', { tabId, reason: e?.message || String(e) });
-    }
-    return true;
-  } catch (error) {
-    if (error.message && error.message.includes('Receiving end does not exist')) {
-      logDebug('sidepanel', 'CONTENT_NOT_READY', 'Content script 미주입', { tabId, hasContent: false });
-    } else {
-      logInfo('sidepanel', 'CONTENT_READY_CHECK_FAILED', 'Content script 상태 확인 실패', { tabId }, error);
+    const ping = await chrome.tabs.sendMessage(tabId, { type: ACTIONS.PING });
+    if (ping?.ok && ping?.version === EXPECTED_CONTENT_RUNTIME_VERSION) {
+      await chrome.tabs.sendMessage(tabId, { action: ACTIONS.GET_PROGRESS_V2 });
+      return true;
     }
 
-    // 2단계: Content script 재주입
-    try {
-      logInfo('sidepanel', 'INJECT_CONTENT', 'Content script 재주입 시도', { tabId, files: ['content.js'] });
-
-      await chrome.scripting.executeScript({
-        target: { tabId },
-        files: ['content/bootstrap.js', 'content/api.js', 'content/cache.js', 'content/industry.js', 'content/dom.js', 'content/title.js', 'content/progress.js', 'content.js']
+    if (ping?.ok) {
+      logInfo('sidepanel', 'CONTENT_VERSION_MISMATCH', '페이지 content script 버전 불일치', {
+        tabId,
+        expectedVersion: EXPECTED_CONTENT_RUNTIME_VERSION,
+        actualVersion: ping?.version || 'unknown'
       });
-
-      logInfo('sidepanel', 'INJECT_CONTENT', 'Content script 재주입 완료', { tabId });
-
-      // 3단계: 준비될 때까지 재시도 (최대 5번, 지수 백오프)
-      for (let attempt = 1; attempt <= maxRetries; attempt++) {
-        const waitTime = Math.min(100 * Math.pow(2, attempt - 1), 1000);
-
-        logDebug('sidepanel', 'CONTENT_READY_RETRY', `재시도 ${attempt}/${maxRetries}`, {
-          tabId,
-          waitMs: waitTime
-        });
-
-        await new Promise(resolve => setTimeout(resolve, waitTime));
-
-        try {
-          await chrome.tabs.sendMessage(tabId, { action: ACTIONS.GET_TRANSLATION_STATE });
-          logInfo('sidepanel', 'CONTENT_READY_SUCCESS', `준비 완료 (${attempt}번째 시도)`, {
-            tabId,
-            attempt
-          });
-          return true;
-        } catch (retryError) {
-          if (attempt === maxRetries) {
-            logError('sidepanel', 'CONTENT_READY_TIMEOUT', '준비 시간 초과', {
-              tabId,
-              attempts: maxRetries
-            }, retryError);
-            return false;
-          }
-        }
-      }
-
       return false;
-
-    } catch (injectError) {
-      logError('sidepanel', 'INJECT_CONTENT', 'Content script 재주입 실패', { tabId }, injectError);
+    }
+  } catch (_) {
+    try {
+      await chrome.scripting.executeScript({
+        target: { tabId },
+        files: CONTENT_SCRIPT_FILES
+      });
+      await new Promise((resolve) => setTimeout(resolve, 120));
+      const ping = await chrome.tabs.sendMessage(tabId, { type: ACTIONS.PING });
+      if (!ping?.ok || ping?.version !== EXPECTED_CONTENT_RUNTIME_VERSION) {
+        logInfo('sidepanel', 'CONTENT_VERSION_MISMATCH', '재주입 후에도 content script 버전 불일치', {
+          tabId,
+          expectedVersion: EXPECTED_CONTENT_RUNTIME_VERSION,
+          actualVersion: ping?.version || 'unknown'
+        });
+        return false;
+      }
+      await chrome.tabs.sendMessage(tabId, { action: ACTIONS.GET_PROGRESS_V2 });
+      return true;
+    } catch (error) {
+      logError('sidepanel', 'CONTENT_NOT_READY', 'Content script 준비 실패', { tabId }, error);
       return false;
     }
   }
 }
 
-/**
- * Content script에 port 연결
- * @param {number} tabId - 대상 탭 ID
- */
 function connectToContentScript(tabId) {
   try {
-    // 이미 연결된 포트가 있으면 재사용 (중복 연결 방지)
     const existing = getPortForTab(tabId);
     if (existing) {
       return;
     }
 
-    // 새 port 연결 (탭별 관리)
     const newPort = chrome.tabs.connect(tabId, { name: PORT_NAMES.PANEL });
     setPortForTab(tabId, newPort);
-    logInfo('sidepanel', 'PORT_CONNECT', 'Content script와 포트 연결', { tabId });
 
     newPort.onMessage.addListener((msg) => {
-      if (msg.type === PORT_MESSAGES.PROGRESS) {
-        // PROGRESS_UPDATE 로깅
-        logDebug('sidepanel', 'PROGRESS_UPDATE', '번역 진행 상태 수신', {
-          tabId,
-          done: msg.data.translatedCount,
-          total: msg.data.totalTexts,
-          percent: msg.data.totalTexts > 0 ? Math.round((msg.data.translatedCount / msg.data.totalTexts) * 100) : 0,
-          activeMs: msg.data.activeMs,
-          cacheHits: msg.data.cachedCount,
-          batches: msg.data.batchesDone + '/' + msg.data.batchCount
-        });
+      if (msg.type !== PORT_MESSAGES.PROGRESS) {
+        return;
+      }
 
-        // 탭별 상태 저장
-        translationStateByTab.set(tabId, { ...msg.data });
+      translationStateByTab.set(tabId, { ...msg.data, batches: [...(msg.data.batches || [])] });
+      if (tabId === currentTabId) {
+        setTranslationState({ ...msg.data, batches: [...(msg.data.batches || [])] });
+        updateUI();
+      }
 
-        // 활성 탭일 때만 UI에 반영
-        if (tabId === currentTabId) {
-          setTranslationState({ ...msg.data });
-          updateUI();
-        } else {
-          logDebug('sidepanel', 'PROGRESS_IGNORED', '활성 탭이 아니어서 UI 업데이트 생략', { fromTab: tabId, currentTabId });
-        }
-
-        // 번역 완료 시 SUMMARY 로깅
-        if (msg.data.state === 'completed') {
-          logInfo('sidepanel', 'SUMMARY', '번역 완료 요약', {
-            tabId,
-            totalTexts: msg.data.totalTexts,
-            translated: msg.data.translatedCount,
-            cacheHits: msg.data.cachedCount,
-            elapsedMs: msg.data.activeMs,
-            batches: msg.data.batchCount
-          });
-
-          void handleTranslationCompletedForHistory(tabId, msg.data);
-        }
+      if (msg.data.state === 'completed') {
+        void handleTranslationCompletedForHistory(tabId, msg.data);
       }
     });
 
     newPort.onDisconnect.addListener(() => {
-      if (chrome.runtime.lastError) {
-        logDebug('sidepanel', 'PORT_DISCONNECT', '포트 연결 끊김 (back/forward cache)', {
-          tabId,
-          error: chrome.runtime.lastError.message
-        });
-      } else {
-        logInfo('sidepanel', 'PORT_DISCONNECT', '포트 연결 끊김', { tabId });
-      }
       removePortForTab(tabId, { disconnect: false });
     });
-
   } catch (error) {
     logError('sidepanel', 'PORT_CONNECT_ERROR', '포트 연결 실패', { tabId }, error);
   }
 }
 
-/**
- * 전체 번역 핸들러
- * @param {boolean} useCache - 캐시 사용 여부 (true: 빠른 모드, false: 새로 번역)
- */
-export async function handleTranslateAll(useCache = true) {
-  const button = useCache ? 'fast-translate' : 'full-translate';
-
+export async function handleStartPageTranslation(profile = DEFAULT_PROFILE) {
   if (!currentTabId) {
     showToast('활성 탭을 찾을 수 없습니다.', 'error');
     return;
   }
 
-  translateModeByTab.set(currentTabId, useCache ? 'cache' : 'fresh');
+  const tab = await chrome.tabs.get(currentTabId);
+  const supportType = getSupportType(tab.url || '');
+  await checkPermissions(tab);
 
-  // 현재 탭 정보 가져오기
-  try {
-    const tab = await chrome.tabs.get(currentTabId);
-    const supportType = getSupportType(tab.url);
-
-    // 권한 상태 갱신
-    await checkPermissions(tab);
-
-    // 지원하지 않는 URL 체크 (사용자 액션 시에만!)
-    if (supportType === 'unsupported') {
-      logInfo('sidepanel', 'UI_CLICK_BLOCKED', '지원하지 않는 URL', {
-        button,
-        tabId: currentTabId,
-        url: tab.url
-      });
-      showToast('이 페이지는 브라우저 정책상 번역을 지원하지 않습니다.', 'error');
-      return;
-    }
-
-    // file:// URL 권한 체크
-    if (supportType === 'file' && !permissionGranted) {
-      logInfo('sidepanel', 'UI_CLICK_BLOCKED', 'file:// 권한 없음', { button, tabId: currentTabId });
-      showToast('파일 URL 접근 권한을 허용해야 번역할 수 있습니다.', 'error');
-      return;
-    }
-
-    // http/https URL 권한 체크
-    if (supportType === 'requestable' && !permissionGranted) {
-      logInfo('sidepanel', 'UI_CLICK_BLOCKED', '권한 미허용', {
-        button,
-        tabId: currentTabId,
-        permissionGranted
-      });
-      showToast('이 사이트를 번역하려면 접근 권한이 필요합니다.', 'error');
-      return;
-    }
-  } catch (error) {
-    logError('sidepanel', 'TAB_INFO_ERROR', '탭 정보 가져오기 실패', { tabId: currentTabId }, error);
-    showToast('탭 정보를 가져올 수 없습니다.', 'error');
+  if (supportType === 'unsupported') {
+    showToast('이 페이지는 브라우저 정책상 번역을 지원하지 않습니다.', 'error');
+    return;
+  }
+  if (supportType === 'file' && !permissionGranted) {
+    showToast('파일 URL 접근 권한을 허용해야 번역할 수 있습니다.', 'error');
+    return;
+  }
+  if (supportType === 'requestable' && !permissionGranted) {
+    showToast('이 사이트를 번역하려면 접근 권한이 필요합니다.', 'error');
     return;
   }
 
-  try {
-    // 설정 가져오기
-    const settings = await chrome.storage.local.get([
-      'apiKey',
-      'model',
-      'batchSize',
-      'concurrency'
-    ]);
+  const config = await getActiveTranslationConfig();
+  const provider = document.getElementById('translationProviderSelect')?.value || config.provider;
+  const model = document.getElementById('translationModelSelect')?.value || config.model;
+  const selectedProfile = profile || config.profile || DEFAULT_PROFILE;
 
-    if (!settings.apiKey) {
-      logInfo('sidepanel', 'UI_CLICK_BLOCKED', 'API Key 미설정', { button, tabId: currentTabId });
-      showToast('먼저 설정에서 API Key를 입력해주세요.', 'error');
-      const { switchTab } = await import('./ui-utils.js');
-      switchTab('settings');
-      return;
-    }
+  await updateActiveTranslationConfig({ provider, model, profile: selectedProfile });
+  const activeConfig = await getActiveTranslationConfig();
 
-    // UI_CLICK 로깅
-    logInfo('sidepanel', 'UI_CLICK', '번역 버튼 클릭', {
-      button,
-      tabId: currentTabId,
-      model: settings.model || DEFAULT_MODEL,
-      batch: settings.batchSize || 50,
-      concurrency: settings.concurrency || 3,
-      useCache
-    });
-
-    // Content script 준비 확인
-    logDebug('sidepanel', 'CONTENT_READY_CHECK', 'Content script 준비 확인 시작', { tabId: currentTabId });
-    const isReady = await ensureContentScriptReady(currentTabId);
-
-    if (!isReady) {
-      logError('sidepanel', 'CONTENT_NOT_READY', 'Content script 준비 실패', { tabId: currentTabId });
-      showToast('페이지 준비 중 오류가 발생했습니다. 다시 시도해주세요.', 'error');
-      return;
-    }
-
-    // 포트 연결 (진행 상태 수신을 위해 필수) - 탭별로 보유
-    if (!getPortForTab(currentTabId)) {
-      connectToContentScript(currentTabId);
-    }
-
-    // DISPATCH_TO_CONTENT (전)
-    logDebug('sidepanel', 'DISPATCH_TO_CONTENT', 'content script에 메시지 전송', {
-      action: ACTIONS.TRANSLATE_FULL_PAGE,
-      tabId: currentTabId
-    });
-
-    // 번역 시작
-    await chrome.tabs.sendMessage(currentTabId, {
-      action: ACTIONS.TRANSLATE_FULL_PAGE,
-      apiKey: settings.apiKey,
-      model: settings.model || DEFAULT_MODEL,
-      batchSize: settings.batchSize || 50,
-      concurrency: settings.concurrency || 3,
-      useCache: useCache
-    });
-
-    // DISPATCH_TO_CONTENT (후 성공)
-    logDebug('sidepanel', 'DISPATCH_TO_CONTENT', '메시지 전송 성공', {
-      action: ACTIONS.TRANSLATE_FULL_PAGE,
-      tabId: currentTabId,
-      ok: true
-    });
-
-  } catch (error) {
-    // DISPATCH_TO_CONTENT (후 실패)
-    logError('sidepanel', 'DISPATCH_TO_CONTENT', '메시지 전송 실패', {
-      action: ACTIONS.TRANSLATE_FULL_PAGE,
-      tabId: currentTabId,
-      ok: false
-    }, error);
-
-    showToast('번역 중 오류가 발생했습니다: ' + error.message, 'error');
+  if (selectedProfile === 'precise' && !activeConfig.hasApiKey) {
+    showToast('설정 탭에서 프로바이더 API Key를 먼저 입력해주세요.', 'error');
+    return;
   }
+
+  const isReady = await ensureContentScriptReady(currentTabId);
+  if (!isReady) {
+    showToast('확장 업데이트 적용을 위해 현재 페이지를 한 번 새로고침한 뒤 다시 번역해주세요.', 'error');
+    return;
+  }
+
+  if (!getPortForTab(currentTabId)) {
+    connectToContentScript(currentTabId);
+  }
+
+  translateModeByTab.set(currentTabId, selectedProfile === 'precise' ? 'fresh' : 'fast');
+
+  const action = selectedProfile === 'precise'
+    ? ACTIONS.START_PRECISE_RETRANSLATION
+    : ACTIONS.START_PAGE_TRANSLATION;
+
+  await chrome.tabs.sendMessage(currentTabId, {
+    action,
+    provider: activeConfig.provider,
+    apiKey: activeConfig.apiKey,
+    model: activeConfig.model,
+    profile: activeConfig.profile
+  });
+
+  logInfo('sidepanel', 'TRANSLATION_START', '페이지 번역 시작', {
+    tabId: currentTabId,
+    provider: selectedProfile === 'precise' ? activeConfig.provider : FAST_PAGE_PROVIDER,
+    model: selectedProfile === 'precise' ? activeConfig.model : FAST_PAGE_MODEL,
+    profile: selectedProfile
+  });
 }
 
 /**
- * 원본 복원 핸들러
+ * 레거시 호출부 호환용 alias
+ * @param {boolean} useCache - true면 fast, false면 precise
  */
+export async function handleTranslateAll(useCache = true) {
+  await handleStartPageTranslation(useCache ? 'fast' : 'precise');
+}
+
 export async function handleRestore() {
-  if (!currentTabId) return;
-
-  logInfo('sidepanel', 'UI_CLICK', '원본 복원 버튼 클릭', { button: 'restore', tabId: currentTabId });
-
-  // URL 체크 (지원하지 않는 페이지에서는 원본 보기 불가)
-  try {
-    const tab = await chrome.tabs.get(currentTabId);
-    const supportType = getSupportType(tab.url);
-
-    // 권한 상태를 동기화
-    await checkPermissions(tab);
-
-    if (supportType === 'unsupported') {
-      logInfo('sidepanel', 'UI_CLICK_BLOCKED', '지원하지 않는 URL에서 원본 보기 시도', {
-        button: 'restore',
-        tabId: currentTabId,
-        url: tab.url
-      });
-      showToast('이 페이지는 브라우저 정책상 원본 보기를 지원하지 않습니다.', 'error');
-      return;
-    }
-
-    if (supportType === 'file' && !permissionGranted) {
-      logInfo('sidepanel', 'UI_CLICK_BLOCKED', 'file:// 권한 없음 (원본 보기)', {
-        button: 'restore',
-        tabId: currentTabId
-      });
-      showToast('파일 URL 접근 권한이 필요합니다.', 'error');
-      return;
-    }
-
-    if (supportType === 'requestable' && !permissionGranted) {
-      logInfo('sidepanel', 'UI_CLICK_BLOCKED', '권한 미허용 (원본 보기)', {
-        button: 'restore',
-        tabId: currentTabId
-      });
-      showToast('이 사이트에 대한 접근 권한이 필요합니다.', 'error');
-      return;
-    }
-  } catch (error) {
-    logError('sidepanel', 'TAB_INFO_ERROR', '탭 정보 가져오기 실패 (원본 보기)', { tabId: currentTabId }, error);
-    showToast('탭 정보를 가져올 수 없습니다.', 'error');
+  if (!currentTabId) {
     return;
   }
 
   try {
-    // Content script 준비 확인
-    const isReady = await ensureContentScriptReady(currentTabId);
-    if (!isReady) {
-      logInfo('sidepanel', 'CONTENT_NOT_READY', 'Content script 준비 실패 (원본 보기)', { tabId: currentTabId });
-      showToast('페이지 준비 중 문제가 발생했습니다. 페이지를 새로고침 후 다시 시도해주세요.', 'error');
+    const tab = await chrome.tabs.get(currentTabId);
+    const supportType = getSupportType(tab.url || '');
+    await checkPermissions(tab);
+
+    if (supportType === 'unsupported') {
+      showToast('이 페이지는 브라우저 정책상 원문 보기를 지원하지 않습니다.', 'error');
+      return;
+    }
+    if (!permissionGranted) {
+      showToast('이 페이지에 대한 접근 권한이 필요합니다.', 'error');
       return;
     }
 
-    // 번역 중이면 번역 작업 취소
-    const _port = getPortForTab(currentTabId);
-    if (translationState.state === 'translating' && _port) {
-      _port.postMessage({
+    await ensurePageContentScript(currentTabId);
+
+    const currentPort = getPortForTab(currentTabId);
+    if (translationState.state === 'translating' && currentPort) {
+      currentPort.postMessage({
         type: PORT_MESSAGES.CANCEL_TRANSLATION,
         reason: 'user_restore'
       });
-      logInfo('sidepanel', 'CANCEL_ON_RESTORE', '원본 보기로 인한 번역 취소', {
-        tabId: currentTabId,
-        translatedCount: translationState.translatedCount
-      });
     }
 
-    await chrome.tabs.sendMessage(currentTabId, {
-      action: ACTIONS.RESTORE_ORIGINAL
-    });
-    logInfo('sidepanel', 'RESTORE_SUCCESS', '원본 복원 완료', { tabId: currentTabId });
-
-    // UI 초기화
+    await chrome.tabs.sendMessage(currentTabId, { action: ACTIONS.RESTORE_PAGE_ORIGINAL });
     resetTranslateUI();
-
-    // 자동 번역 플래그 초기화 (원본 복원 후 다시 자동 번역 가능하도록)
     autoTranslateTriggeredByTab.delete(currentTabId);
   } catch (error) {
     logError('sidepanel', 'RESTORE_ERROR', '원본 복원 실패', { tabId: currentTabId }, error);
     showToast('원본 복원 중 오류가 발생했습니다: ' + error.message, 'error');
   }
-}
-
-/**
- * 번역 초기화 버튼 클릭 핸들러
- */
-export async function handleResetTranslate() {
-  logInfo('sidepanel', 'RESET_TRANSLATE', '번역 상태 초기화 버튼 클릭', {
-    currentState: translationState.state
-  });
-
-  if (!currentTabId) {
-    showToast('탭 정보를 가져올 수 없습니다.', 'error');
-    return;
-  }
-
-  try {
-    // 번역 중이면 번역 작업 취소
-    const _p = getPortForTab(currentTabId);
-    if (translationState.state === 'translating' && _p) {
-      _p.postMessage({
-        type: PORT_MESSAGES.CANCEL_TRANSLATION,
-        reason: 'user_reset'
-      });
-      logInfo('sidepanel', 'CANCEL_ON_RESET', '초기화로 인한 번역 취소', {
-        tabId: currentTabId,
-        translatedCount: translationState.translatedCount
-      });
-    }
-
-    // 원본 복원 (번역된 페이지도 초기화)
-    await chrome.tabs.sendMessage(currentTabId, {
-      action: ACTIONS.RESTORE_ORIGINAL
-    });
-    logInfo('sidepanel', 'RESET_WITH_RESTORE', '초기화 + 원본 복원 완료', { tabId: currentTabId });
-  } catch (error) {
-    logInfo('sidepanel', 'RESET_NO_CONTENT_SCRIPT', '초기화: Content script 없음', { tabId: currentTabId });
-  }
-
-  // UI 초기화
-  resetTranslateUI();
-  // 이 탭의 저장 상태도 초기화하여 재진입 시 '완료' 잔상 방지
-  try {
-    translationStateByTab.set(currentTabId, createDefaultTranslationState());
-  } catch (_) {}
-  showToast('번역이 초기화되었습니다.');
 }

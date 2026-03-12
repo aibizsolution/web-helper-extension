@@ -11,14 +11,25 @@
 
 /**
  * @typedef {Object} TranslationState
- * @property {'inactive'|'translating'|'completed'|'restored'|'error'|'cancelled'} state
+ * @property {'inactive'|'analyzing'|'translating'|'completed'|'restored'|'error'} state
+ * @property {'idle'|'analyzing'|'visible'|'full'|'completed'} phase
+ * @property {number} priority
+ * @property {number} totalSegments
+ * @property {number} visibleSegments
+ * @property {number} translatedSegments
  * @property {number} totalTexts
  * @property {number} translatedCount
  * @property {number} cachedCount
+ * @property {number} cacheHits
  * @property {number} batchCount
  * @property {number} batchesDone
  * @property {BatchInfo[]} batches
+ * @property {number} activeRequests
+ * @property {number} etaMs
  * @property {number} activeMs
+ * @property {string} provider
+ * @property {string} model
+ * @property {'fast'|'precise'} profile
  * @property {string} originalTitle
  * @property {string} translatedTitle
  * @property {string} previewText
