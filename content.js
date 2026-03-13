@@ -30,6 +30,8 @@ if (typeof window.__WPT_INITIALIZED !== 'undefined') {
       START_PRECISE_RETRANSLATION: 'START_PRECISE_RETRANSLATION',
       RESTORE_PAGE_ORIGINAL: 'RESTORE_PAGE_ORIGINAL',
       TRANSLATE_SELECTION: 'TRANSLATE_SELECTION',
+      COPY_SELECTION: 'COPY_SELECTION',
+      EXPLAIN_SELECTION: 'EXPLAIN_SELECTION',
       GET_PROGRESS_V2: 'GET_PROGRESS_V2',
       OPEN_QUICK_TRANSLATE_PANEL: 'OPEN_QUICK_TRANSLATE_PANEL',
       TRANSLATE_FULL_PAGE: 'translateFullPage',
@@ -38,7 +40,15 @@ if (typeof window.__WPT_INITIALIZED !== 'undefined') {
       GET_TRANSLATED_TITLE: 'getTranslatedTitle',
       GET_CACHE_STATUS: 'getCacheStatus',
       CLEAR_CACHE_FOR_DOMAIN: 'clearCacheForDomain'
-    }
+    },
+    STORAGE_KEYS: {
+      PENDING_QUICK_TRANSLATE: 'pendingQuickTranslate'
+    },
+    SELECTION_ACTIONS: [
+      { key: 'translate', label: '번역', tone: 'primary', messageAction: 'TRANSLATE_SELECTION' },
+      { key: 'copy', label: '복사', tone: 'secondary', messageAction: 'COPY_SELECTION' },
+      { key: 'explain', label: '설명하기', tone: 'secondary', messageAction: 'EXPLAIN_SELECTION' }
+    ]
   };
 
   const PROFILE_CONFIG = {
@@ -258,6 +268,24 @@ if (typeof window.__WPT_INITIALIZED !== 'undefined') {
         ? WPT.Selection.translateSelectionText(request.text || '', { source: 'message' })
         : Promise.reject(new Error('selection_not_ready')))
         .then((translation) => sendResponse({ success: true, translation }))
+        .catch((error) => sendResponse({ success: false, error: error.message }));
+      return true;
+    }
+
+    if (request.action === CONST.ACTIONS.COPY_SELECTION) {
+      (WPT.Selection && WPT.Selection.copySelectionText
+        ? WPT.Selection.copySelectionText(request.text || '', { source: 'message', showFeedback: false })
+        : Promise.reject(new Error('selection_not_ready')))
+        .then(() => sendResponse({ success: true }))
+        .catch((error) => sendResponse({ success: false, error: error.message }));
+      return true;
+    }
+
+    if (request.action === CONST.ACTIONS.EXPLAIN_SELECTION) {
+      (WPT.Selection && WPT.Selection.explainSelectionText
+        ? WPT.Selection.explainSelectionText(request.text || '', { source: 'message' })
+        : Promise.reject(new Error('selection_not_ready')))
+        .then((explanation) => sendResponse({ success: true, explanation }))
         .catch((error) => sendResponse({ success: false, error: error.message }));
       return true;
     }

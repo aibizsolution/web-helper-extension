@@ -2,207 +2,51 @@
  * Side Panel 전역 상태 관리
  *
  * 역할:
- * - 현재 탭 정보 (currentTabId)
- * - 탭별 Port 맵 (portsByTab)
- * - 권한 상태 (permissionGranted)
- * - 번역 진행 상태 (translationState)
- * - 탭별 독립 상태 추적 (translationStateByTab, translateModeByTab)
- * - 설정 변경 추적 (settingsChanged, originalSettings)
+ * - 패널 세션 상태
+ * - 현재 활성 브라우저 탭 컨텍스트
+ * - 설정 임시 상태
+ * - 번역 런타임 상태
  */
 
-// ===== 전역 상태 변수 =====
-
-/**
- * 현재 활성 탭 ID
- * @type {number | null}
- */
 export let currentTabId = null;
-
-/**
- * Content Script와의 통신 Port
- * @type {chrome.runtime.Port | null}
- */
-// 탭별 Port 맵: Map<tabId, chrome.runtime.Port>
-export const portsByTab = new Map();
-
-/**
- * 현재 탭의 권한 상태 (http/https/file:// 지원)
- * @type {boolean}
- */
 export let permissionGranted = false;
-
-/**
- * 설정 변경 여부 (저장 바 표시용)
- * @type {boolean}
- */
 export let settingsChanged = false;
-
-/**
- * 원본 설정 (취소 시 복원용)
- * @type {object}
- */
 export let originalSettings = {};
-
-/**
- * 마지막 번역 모드 ('cache' | 'full')
- * @type {string}
- */
 export let lastTranslateMode = 'cache';
-
-/**
- * 직전 히스토리 저장 메타 정보 (중복 저장 방지)
- * @type {object}
- */
 export let lastHistoryCompletionMeta = { signature: null, ts: 0 };
+export let translationState = createDefaultTranslationState();
 
-/**
- * 탭별 마지막 번역 모드 추적
- * Map<tabId, mode>
- * @type {Map<number, string>}
- */
+export const portsByTab = new Map();
 export const translateModeByTab = new Map();
-
-/**
- * 탭별 번역 상태 추적
- * Map<tabId, translationState>
- * @type {Map<number, object>}
- */
 export const translationStateByTab = new Map();
-
-/**
- * 탭별 자동 번역 실행 플래그 (중복 실행 방지)
- * Map<tabId, boolean>
- * @type {Map<number, boolean>}
- */
 export const autoTranslateTriggeredByTab = new Map();
 
-/**
- * 현재 탭의 번역 진행 상태
- * @type {object}
- */
-export let translationState = {
-  state: 'inactive',              // inactive | analyzing | translating | completed | restored | error
-  phase: 'idle',                  // idle | analyzing | visible | full | completed
-  priority: 0,                    // 현재 우선순위
-  totalSegments: 0,               // 전체 세그먼트 수
-  visibleSegments: 0,             // 우선 표시 세그먼트 수
-  translatedSegments: 0,          // 번역 완료 세그먼트 수
-  totalTexts: 0,                  // 레거시 호환용
-  translatedCount: 0,             // 레거시 호환용
-  cachedCount: 0,                 // 캐시 사용 수
-  cacheHits: 0,                   // 캐시 적중 수
-  batchCount: 0,                  // 전체 배치 수
-  batchesDone: 0,                 // 완료 배치 수
-  batches: [],                    // 배치 상세 정보
-  activeRequests: 0,              // 현재 활성 요청 수
-  etaMs: 0,                       // 예상 남은 시간
-  activeMs: 0,                    // 경과 시간 (ms)
-  provider: '',                   // 활성 프로바이더
-  model: '',                      // 활성 모델
-  profile: 'fast',                // fast | precise
-  originalTitle: '',              // 번역 전 제목
-  translatedTitle: '',            // 번역 후 제목
-  previewText: ''                 // 번역 프리뷰 텍스트
+const panelSessionState = {
+  activePanelTab: 'translate',
+  activeTranslatePanel: 'page'
 };
 
-// ===== Setter 함수 =====
+const activeBrowserContext = {
+  tabId: null,
+  permissionGranted: false,
+  tabUrl: ''
+};
 
-/**
- * 현재 탭 ID 조회
- * @returns {number | null} 현재 탭 ID
- */
-export function getCurrentTabId() {
-  return currentTabId;
+const settingsDraftState = {
+  changed: false,
+  original: {}
+};
+
+function syncSettingsDraftState() {
+  settingsDraftState.changed = settingsChanged;
+  settingsDraftState.original = originalSettings;
 }
 
-/**
- * 현재 탭 ID 설정
- * @param {number} tabId - 탭 ID
- */
-export function setCurrentTabId(tabId) {
-  currentTabId = tabId;
+function syncActiveBrowserContext() {
+  activeBrowserContext.tabId = currentTabId;
+  activeBrowserContext.permissionGranted = permissionGranted;
 }
 
-/**
- * Port 설정
- * @param {chrome.runtime.Port | null} newPort - Port 객체
- */
-// Port 헬퍼
-export function getPortForTab(tabId) {
-  return portsByTab.get(tabId) || null;
-}
-
-export function setPortForTab(tabId, newPort) {
-  if (typeof tabId !== 'number') return;
-  if (newPort) {
-    portsByTab.set(tabId, newPort);
-  } else {
-    portsByTab.delete(tabId);
-  }
-}
-
-export function removePortForTab(tabId, { disconnect = true } = {}) {
-  const p = portsByTab.get(tabId);
-  if (p && disconnect) {
-    try { p.disconnect(); } catch (e) { /* noop */ }
-  }
-  portsByTab.delete(tabId);
-}
-
-/**
- * 권한 상태 설정
- * @param {boolean} value - 권한 여부
- */
-export function setPermissionGranted(value) {
-  permissionGranted = value;
-}
-
-/**
- * 설정 변경 여부 설정
- * @param {boolean} value - 변경 여부
- */
-export function setSettingsChanged(value) {
-  settingsChanged = value;
-}
-
-/**
- * 원본 설정 저장
- * @param {object} settings - 설정 객체
- */
-export function setOriginalSettings(settings) {
-  originalSettings = settings;
-}
-
-/**
- * 마지막 번역 모드 설정
- * @param {string} mode - 'cache' | 'full'
- */
-export function setLastTranslateMode(mode) {
-  lastTranslateMode = mode;
-}
-
-/**
- * 히스토리 완료 메타 설정
- * @param {object} meta - { signature, ts }
- */
-export function setLastHistoryCompletionMeta(meta) {
-  lastHistoryCompletionMeta = meta;
-}
-
-/**
- * 번역 상태 전체 설정
- * @param {object} newState - 새로운 상태 객체
- */
-export function setTranslationState(newState) {
-  translationState = newState;
-}
-
-// ===== 상태 생성 함수 =====
-
-/**
- * 기본 번역 상태 객체 생성
- * @returns {object} 기본 상태
- */
 export function createDefaultTranslationState() {
   return {
     state: 'inactive',
@@ -229,3 +73,140 @@ export function createDefaultTranslationState() {
     previewText: ''
   };
 }
+
+export function getPanelSessionState() {
+  return panelSessionState;
+}
+
+export function getActiveBrowserContext() {
+  return activeBrowserContext;
+}
+
+export function getSettingsDraftState() {
+  return settingsDraftState;
+}
+
+export function getCurrentTabId() {
+  return currentTabId;
+}
+
+export function setCurrentTabId(tabId) {
+  currentTabId = typeof tabId === 'number' ? tabId : null;
+  syncActiveBrowserContext();
+}
+
+export function getPermissionGranted() {
+  return permissionGranted;
+}
+
+export function setPermissionGranted(value) {
+  permissionGranted = Boolean(value);
+  syncActiveBrowserContext();
+}
+
+export function getSettingsChanged() {
+  return settingsChanged;
+}
+
+export function setSettingsChanged(value) {
+  settingsChanged = Boolean(value);
+  syncSettingsDraftState();
+}
+
+export function getOriginalSettings() {
+  return originalSettings;
+}
+
+export function setOriginalSettings(settings) {
+  originalSettings = settings || {};
+  syncSettingsDraftState();
+}
+
+export function getTranslationState() {
+  return translationState;
+}
+
+export function setTranslationState(newState) {
+  translationState = {
+    ...createDefaultTranslationState(),
+    ...(newState || {}),
+    batches: Array.isArray(newState?.batches) ? [...newState.batches] : []
+  };
+}
+
+export function resetTranslationState() {
+  setTranslationState(createDefaultTranslationState());
+}
+
+export function getLastTranslateMode() {
+  return lastTranslateMode;
+}
+
+export function setLastTranslateMode(mode) {
+  lastTranslateMode = mode;
+}
+
+export function getLastHistoryCompletionMeta() {
+  return lastHistoryCompletionMeta;
+}
+
+export function setLastHistoryCompletionMeta(meta) {
+  lastHistoryCompletionMeta = meta || { signature: null, ts: 0 };
+}
+
+export function setActivePanelTab(tabName) {
+  panelSessionState.activePanelTab = tabName || 'translate';
+}
+
+export function setActiveTranslatePanel(panelName) {
+  panelSessionState.activeTranslatePanel = panelName || 'page';
+}
+
+export function updateActiveBrowserContext(patch = {}) {
+  if (typeof patch.tabId === 'number' || patch.tabId === null) {
+    currentTabId = patch.tabId;
+    activeBrowserContext.tabId = patch.tabId;
+  }
+
+  if (typeof patch.permissionGranted === 'boolean') {
+    permissionGranted = patch.permissionGranted;
+    activeBrowserContext.permissionGranted = patch.permissionGranted;
+  }
+
+  if (typeof patch.tabUrl === 'string') {
+    activeBrowserContext.tabUrl = patch.tabUrl;
+  }
+}
+
+export function getPortForTab(tabId) {
+  return portsByTab.get(tabId) || null;
+}
+
+export function setPortForTab(tabId, newPort) {
+  if (typeof tabId !== 'number') {
+    return;
+  }
+
+  if (newPort) {
+    portsByTab.set(tabId, newPort);
+    return;
+  }
+
+  portsByTab.delete(tabId);
+}
+
+export function removePortForTab(tabId, { disconnect = true } = {}) {
+  const port = portsByTab.get(tabId);
+  if (port && disconnect) {
+    try {
+      port.disconnect();
+    } catch (_) {
+      // noop
+    }
+  }
+
+  portsByTab.delete(tabId);
+}
+
+syncSettingsDraftState();
+syncActiveBrowserContext();

@@ -7,17 +7,17 @@ const MAX_LOGS = 500; // ring-buffer 크기
 
 // 로그 ring-buffer (session storage에 저장)
 let logBuffer = [];
-let currentLogLevel = 'INFO'; // 기본값
+let currentLogLevel = 'WARN'; // 기본값: 경고/오류는 항상 수집
 
 // 초기화: storage에서 설정 로드
 export async function initLogger() {
   try {
     const result = await chrome.storage.local.get(['debugLog']);
-    // debugLog가 ON이면 모든 로그 출력 ('DEBUG'), OFF이면 모든 로그 차단 ('INFO')
-    currentLogLevel = result.debugLog ? 'DEBUG' : 'INFO';
+    // debugLog가 ON이면 DEBUG까지 모두 기록하고, OFF여도 WARN/ERROR는 계속 수집한다.
+    currentLogLevel = result.debugLog ? 'DEBUG' : 'WARN';
     console.log('[WPT] Logger initialized with debugLog:', result.debugLog);
   } catch (error) {
-    // storage 접근 실패 시 기본값 유지 (로그 차단)
+    // storage 접근 실패 시 기본값 유지
     console.error('[WPT] Logger init failed:', error);
   }
 }
@@ -26,8 +26,8 @@ export async function initLogger() {
 if (typeof chrome !== 'undefined' && chrome.storage) {
   chrome.storage.onChanged.addListener((changes, area) => {
     if (area === 'local' && changes.debugLog) {
-      // debugLog가 ON이면 모든 로그 출력 ('DEBUG'), OFF이면 모든 로그 차단 ('INFO')
-      currentLogLevel = changes.debugLog.newValue ? 'DEBUG' : 'INFO';
+      // debugLog가 ON이면 DEBUG까지 모두 기록하고, OFF여도 WARN/ERROR는 계속 수집한다.
+      currentLogLevel = changes.debugLog.newValue ? 'DEBUG' : 'WARN';
       console.log('[WPT] Debug mode changed:', changes.debugLog.newValue);
     }
   });
@@ -79,8 +79,9 @@ function maskSensitive(data) {
  * @param {Error|string} err - 에러 객체 또는 메시지
  */
 export function log(level, ns, evt, msg = '', data = {}, err = null) {
-  // 로그 필터링: debugLog OFF면 모든 로그 차단
-  if (currentLogLevel === 'INFO') {
+  const recordLevel = LEVEL_MAP[level] ?? LEVEL_MAP.INFO;
+  const threshold = LEVEL_MAP[currentLogLevel] ?? LEVEL_MAP.WARN;
+  if (recordLevel < threshold) {
     return;
   }
 
@@ -152,6 +153,68 @@ export async function getLogs() {
   } catch (error) {
     return logBuffer;
   }
+}
+
+function isIssueLogLine(logLine) {
+  return /\["ERROR"\]|\["WARN"\]|"level":"ERROR"|"level":"WARN"/.test(String(logLine || ''));
+}
+
+function getRawLogLevel(logLine) {
+  const rawLine = String(logLine || '');
+  if (/\["WARN"\]|"level":"WARN"/.test(rawLine)) {
+    return 'WARN';
+  }
+
+  if (/\["ERROR"\]|"level":"ERROR"/.test(rawLine)) {
+    return 'ERROR';
+  }
+
+  return 'INFO';
+}
+
+export function parseStoredLogLine(logLine) {
+  if (typeof logLine !== 'string' || logLine.length === 0) {
+    return null;
+  }
+
+  try {
+    return JSON.parse(logLine);
+  } catch (_) {
+    const raw = String(logLine || '').trim();
+    if (!raw) {
+      return null;
+    }
+
+    return {
+      ts: new Date().toISOString(),
+      level: isIssueLogLine(raw) ? getRawLogLevel(raw) : 'INFO',
+      ns: 'unknown',
+      evt: 'RAW_LOG',
+      msg: raw,
+      raw
+    };
+  }
+}
+
+export async function getLogEntries(options = {}) {
+  const levels = Array.isArray(options.levels)
+    ? new Set(options.levels.map((level) => String(level || '').toUpperCase()))
+    : null;
+  const logs = await getLogs();
+
+  return logs
+    .map((logLine) => parseStoredLogLine(logLine))
+    .filter((entry) => {
+      if (!entry) {
+        return false;
+      }
+
+      if (!levels) {
+        return true;
+      }
+
+      return levels.has(String(entry.level || '').toUpperCase());
+    });
 }
 
 /**

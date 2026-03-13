@@ -8,36 +8,19 @@
  * - 전체 캐시 상태 조회
  */
 
+import { ACTIONS, SELECTION_ACTIONS, SELECTION_CONTEXT_MENU_ROOT_ID, STORAGE_KEYS } from './modules/constants.js';
+import { CONTENT_SCRIPT_FILES, PANEL_SESSION_KEY } from './modules/panel-constants.js';
+
 const LEVEL_MAP = { DEBUG: 0, INFO: 1, WARN: 2, ERROR: 3 };
 let currentLogLevel = 'INFO';
 
-const ACTIONS = {
-  PING: 'PING',
-  TRANSLATE_SELECTION: 'TRANSLATE_SELECTION',
-  OPEN_QUICK_TRANSLATE_PANEL: 'OPEN_QUICK_TRANSLATE_PANEL',
-  FAST_TRANSLATE_INDEXED_TEXT: 'FAST_TRANSLATE_INDEXED_TEXT',
-  GET_TOTAL_CACHE_STATUS: 'getTotalCacheStatus',
-  FETCH_HTML_FOR_BOT_AUDIT: 'FETCH_HTML_FOR_BOT_AUDIT'
-};
-
-const CONTENT_SCRIPT_FILES = [
-  'content/bootstrap.js',
-  'content/api.js',
-  'content/provider.js',
-  'content/cache.js',
-  'content/industry.js',
-  'content/dom.js',
-  'content/title.js',
-  'content/progress.js',
-  'content/selection.js',
-  'content.js'
-];
-
-const CONTEXT_MENU_ID = 'wpt-translate-selection';
-const QUICK_TRANSLATE_SESSION_KEY = 'lastActiveTab';
 const FAST_TRANSLATE_TARGET_LANGUAGE = 'ko';
 const SIDE_PANEL_COMMAND_ID = 'open-side-panel';
 const openSidePanelWindows = new Set();
+
+const selectionActionByMenuId = new Map(
+  SELECTION_ACTIONS.map((action) => [action.contextMenuId, action])
+);
 
 (async () => {
   try {
@@ -196,9 +179,17 @@ async function registerContextMenus() {
   try {
     await chrome.contextMenus.removeAll();
     chrome.contextMenus.create({
-      id: CONTEXT_MENU_ID,
-      title: '선택 텍스트 번역',
+      id: SELECTION_CONTEXT_MENU_ROOT_ID,
+      title: '웹 도우미',
       contexts: ['selection']
+    });
+    SELECTION_ACTIONS.forEach((action) => {
+      chrome.contextMenus.create({
+        id: action.contextMenuId,
+        parentId: SELECTION_CONTEXT_MENU_ROOT_ID,
+        title: action.label,
+        contexts: ['selection']
+      });
     });
     logInfo('CONTEXT_MENU_REGISTERED', '선택 번역 메뉴 등록 완료');
   } catch (error) {
@@ -221,19 +212,24 @@ async function ensureContentScript(tabId) {
 }
 
 chrome.contextMenus.onClicked.addListener(async (info, tab) => {
-  if (info.menuItemId !== CONTEXT_MENU_ID || !tab?.id || !info.selectionText) {
+  if (!tab?.id || !info.selectionText) {
     return;
   }
 
   try {
     await ensureContentScript(tab.id);
-    await chrome.tabs.sendMessage(tab.id, {
-      action: ACTIONS.TRANSLATE_SELECTION,
-      text: info.selectionText
-    });
+    const selectedAction = selectionActionByMenuId.get(info.menuItemId);
+    const action = selectedAction?.messageAction || '';
+
+    if (!action) {
+      return;
+    }
+
+    await chrome.tabs.sendMessage(tab.id, { action, text: info.selectionText });
   } catch (error) {
-    logError('SELECTION_TRANSLATE_DISPATCH_FAILED', '우클릭 선택 번역 전달 실패', {
-      tabId: tab.id
+    logError('SELECTION_MENU_DISPATCH_FAILED', '우클릭 선택 액션 전달 실패', {
+      tabId: tab.id,
+      menuItemId: info.menuItemId
     }, error);
   }
 });
@@ -250,8 +246,8 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     void (async () => {
       try {
         await chrome.storage.session.set({
-          [QUICK_TRANSLATE_SESSION_KEY]: 'quickTranslate',
-          pendingQuickTranslate: {
+          [PANEL_SESSION_KEY]: 'text',
+          [STORAGE_KEYS.PENDING_QUICK_TRANSLATE]: {
             text: request.text || '',
             translation: request.translation || '',
             ts: Date.now()

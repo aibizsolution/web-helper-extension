@@ -1,0 +1,188 @@
+/* Layout */
+    /* 패널 전체 레이아웃: 좌측(컨텐츠) + 우측(탭바) */
+    .panel-container {
+      display: flex;
+      height: 100vh;
+    }
+
+    /* 좌측 컨텐츠 영역 */
+    .content-area {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    /* 헤더 (고정) */
+    .panel-header {
+      padding: var(--space-lg);
+      border-bottom: 1px solid var(--border-color);
+      flex-shrink: 0;
+    }
+
+    .panel-header h1 {
+      font-size: 18px;
+      font-weight: 700;
+      color: var(--text-primary);
+    }
+
+    /* 메인 컨텐츠 (스크롤) */
+    .panel-main {
+      flex: 1;
+      overflow-y: auto;
+      padding: var(--space-lg);
+      /* 다크 스크롤바 */
+      scrollbar-width: thin;
+      scrollbar-color: #2A2F38 #0F1115;
+    }
+
+    /* 웹킷 브라우저 스크롤바 */
+    .panel-main::-webkit-scrollbar {
+      width: 10px;
+    }
+
+    .panel-main::-webkit-scrollbar-track {
+      background: #0F1115;
+      border-left: 1px solid var(--border-color);
+    }
+
+    .panel-main::-webkit-scrollbar-thumb {
+      background: #2A2F38;
+      border-radius: 9999px;
+      border: 2px solid #0F1115;
+    }
+
+    .panel-main::-webkit-scrollbar-thumb:hover {
+      background: #39404C;
+    }
+
+    /* 푸터 (고정) */
+    .panel-footer {
+      padding: var(--space-md) var(--space-lg);
+      border-top: 1px solid var(--border-color);
+      text-align: center;
+      flex-shrink: 0;
+    }
+
+    .panel-footer-text {
+      font-size: 11px;
+      color: var(--text-secondary);
+      line-height: 1.5;
+    }
+
+    /* 우측 세로 탭바 */
+    .vertical-tabbar {
+      width: var(--tabbar-width);
+      background: var(--bg-tabbar);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: var(--space-sm) 0;
+      gap: var(--space-xs);
+      flex-shrink: 0;
+      border-left: 1px solid var(--border-color);
+    }
+
+    .vertical-tabbar .tabbar-divider {
+      width: 40px;
+      height: 1px;
+      background: var(--border-color);
+      border-radius: 9999px;
+    }
+
+    .vertical-tabbar .tabbar-divider[role="presentation"] {
+      pointer-events: none;
+    }
+
+    .vertical-tabbar button {
+      position: relative;
+      width: 100%;
+      height: 64px;
+      background: transparent;
+      border: none;
+      color: var(--text-secondary);
+      cursor: pointer;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 4px;
+      transition: all 0.2s;
+      padding: 8px;
+    }
+
+    .vertical-tabbar button:hover {
+      background: rgba(255, 255, 255, 0.05);
+    }
+
+    /* 키보드 탐색 시에만 포커스 표시 (마우스 클릭 시 잔상 제거) */
+    .vertical-tabbar button:focus {
+      outline: none;
+    }
+
+    .vertical-tabbar button:focus-visible {
+      outline: 2px solid rgba(42, 108, 240, 0.6);
+      outline-offset: -2px;
+    }
+
+    /* 활성 탭 표시 (좌측 인디케이터) */
+    .vertical-tabbar button[aria-selected="true"]::before {
+      content: '';
+      position: absolute;
+      left: 0;
+      top: 50%;
+      transform: translateY(-50%);
+      width: 2px;
+      height: 32px;
+      background: var(--status-active);
+      border-radius: 0 2px 2px 0;
+    }
+
+    .vertical-tabbar button[aria-selected="true"] {
+      color: var(--text-primary);
+    }
+
+    /* 아이콘 */
+    .vertical-tabbar button svg {
+      width: 22px;
+      height: 22px;
+      fill: currentColor;
+    }
+
+    /* 라벨 */
+    .vertical-tabbar button span {
+      font-size: 11px;
+      text-align: center;
+      white-space: nowrap;
+    }
+
+    .vertical-tabbar button.has-errors[aria-selected="false"] {
+      color: #fca5a5;
+    }
+
+    .tab-badge {
+      position: absolute;
+      top: 8px;
+      right: 10px;
+      min-width: 18px;
+      height: 18px;
+      padding: 0 5px;
+      border-radius: 999px;
+      background: #dc2626;
+      color: #ffffff;
+      font-size: 10px;
+      font-weight: 700;
+      line-height: 18px;
+      text-align: center;
+      box-shadow: 0 4px 10px rgba(220, 38, 38, 0.26);
+    }
+
+    
+    /* 탭 컨텐츠 */
+    .tab-content {
+      display: none;
+    }
+
+    .tab-content.active {
+      display: block;
+    }

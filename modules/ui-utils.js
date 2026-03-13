@@ -2,30 +2,33 @@
  * Side Panel UI 유틸리티
  *
  * 역할:
- * - 탭 전환/세션 복원
+ * - 메인 탭/서브탭 DOM 전환
+ * - 세션 복원
  * - 토스트 표시
  * - Content script 준비 확인/주입
- * - 번역 UI 업데이트
+ * - 번역 상태 UI 반영
  */
 
-import { logInfo, logDebug, logError, getLogs } from '../logger.js';
+import { logInfo, logDebug, logError, getLogEntries, getLogs } from '../logger.js';
 import { ACTIONS } from './constants.js';
-import { currentTabId, translationState } from './state.js';
-
-const SESSION_KEY = 'lastActiveTab';
-const GITHUB_REPO_URL = 'https://github.com/park-youngtack/chrome_ext_yt_ai';
-const CONTENT_SCRIPT_FILES = [
-  'content/bootstrap.js',
-  'content/api.js',
-  'content/provider.js',
-  'content/cache.js',
-  'content/industry.js',
-  'content/dom.js',
-  'content/title.js',
-  'content/progress.js',
-  'content/selection.js',
-  'content.js'
-];
+import {
+  createDefaultTranslationState,
+  getCurrentTabId,
+  getTranslationState,
+  setActivePanelTab,
+  setActiveTranslatePanel,
+  setTranslationState
+} from './state.js';
+import {
+  CONTENT_SCRIPT_FILES,
+  DEFAULT_MAIN_TAB,
+  DEFAULT_TRANSLATE_PANEL,
+  GITHUB_REPO_URL,
+  PANEL_SESSION_KEY,
+  PANEL_TITLES
+} from './panel-constants.js';
+import { syncActivePanels, syncAriaTabButtons } from './panel-dom.js';
+import { activateRegisteredTab } from './tab-registry.js';
 
 export function initTranslateSubtabs() {
   const subtabButtons = document.querySelectorAll('[data-translate-panel]');
@@ -50,14 +53,14 @@ export function initTranslateSubtabs() {
 
 export function initTabbar() {
   const tabButtons = document.querySelectorAll('.vertical-tabbar button[role="tab"]');
-  tabButtons.forEach((btn) => {
-    btn.addEventListener('click', () => {
-      const tabName = btn.dataset.tab;
+  tabButtons.forEach((button) => {
+    button.addEventListener('click', () => {
+      const tabName = button.dataset.tab;
       if (tabName) {
-        switchTab(tabName);
+        void switchTab(tabName);
       }
     });
-    btn.addEventListener('keydown', handleTabKeydown);
+    button.addEventListener('keydown', handleTabKeydown);
   });
 }
 
@@ -72,7 +75,9 @@ export function initExternalLinks() {
       await chrome.tabs.create({ url: GITHUB_REPO_URL, active: true });
       logInfo('sidepanel', 'GITHUB_REPO_OPENED', 'GitHub 저장소 열기', { url: GITHUB_REPO_URL });
     } catch (error) {
-      logError('sidepanel', 'GITHUB_REPO_OPEN_FAILED', 'GitHub 저장소 열기 실패', { message: error?.message ?? String(error) }, error);
+      logError('sidepanel', 'GITHUB_REPO_OPEN_FAILED', 'GitHub 저장소 열기 실패', {
+        message: error?.message ?? String(error)
+      }, error);
     }
   };
 
@@ -80,9 +85,37 @@ export function initExternalLinks() {
   githubLinkBtn.addEventListener('keydown', (event) => {
     if (event.key === 'Enter' || event.key === ' ' || event.key === 'Spacebar') {
       event.preventDefault();
-      openGithubRepository();
+      void openGithubRepository();
     }
   });
+}
+
+function normalizeTranslatePanel(panelName) {
+  if (panelName === 'history') {
+    return 'history';
+  }
+
+  if (panelName === 'text' || panelName === 'quickTranslate') {
+    return 'text';
+  }
+
+  return DEFAULT_TRANSLATE_PANEL;
+}
+
+function getStoredPanelSessionValue(tabName, translatePanel = DEFAULT_TRANSLATE_PANEL) {
+  if (tabName !== 'translate') {
+    return tabName || DEFAULT_MAIN_TAB;
+  }
+
+  if (translatePanel === 'history') {
+    return 'history';
+  }
+
+  if (translatePanel === 'text') {
+    return 'text';
+  }
+
+  return 'translate';
 }
 
 function handleTabKeydown(event) {
@@ -99,108 +132,136 @@ function handleTabKeydown(event) {
     event.preventDefault();
     const tabName = event.target.dataset.tab;
     if (tabName) {
-      switchTab(tabName);
+      void switchTab(tabName);
     }
   }
 }
 
-export async function switchTab(tabName) {
-  const { loadSettings } = await import('./settings.js');
-  const { initializeSearchTab } = await import('./search.js');
-  const { initQuickTranslateTab } = await import('./quick-translate.js');
-  const normalizedTabName = tabName === 'history' ? 'translate' : tabName;
-  const translatePanel = tabName === 'history' ? 'history' : getActiveTranslateSubtab();
+async function getCurrentBrowserTab() {
+  const currentId = getCurrentTabId();
+  if (typeof currentId === 'number') {
+    try {
+      return await chrome.tabs.get(currentId);
+    } catch (_) {
+      // fall through
+    }
+  }
 
-  document.querySelectorAll('.vertical-tabbar button[role="tab"]').forEach((btn) => {
-    btn.setAttribute('aria-selected', btn.dataset.tab === normalizedTabName ? 'true' : 'false');
-  });
+  const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
+  return tabs?.[0] || null;
+}
 
-  document.querySelectorAll('.tab-content').forEach((content) => {
-    content.classList.toggle('active', content.id === `${normalizedTabName}Tab`);
-  });
+function updateMainTabButtons(activeTabName) {
+  const tabButtons = document.querySelectorAll('.vertical-tabbar button[role="tab"]');
+  syncAriaTabButtons(tabButtons, (button) => button.dataset.tab === activeTabName);
+}
 
-  const titleMap = {
-    translate: '웹 도우미',
-    quickTranslate: '텍스트 번역',
-    geo: 'SEO 검사',
-    search: '스마트 검색',
-    recurring: '반복 체크리스트',
-    settings: '설정'
-  };
+function updateMainTabPanels(activeTabName) {
+  const panels = document.querySelectorAll('.tab-content');
+  syncActivePanels(panels, (panel) => panel.id === `${activeTabName}Tab`);
+}
 
+function updatePanelTitle(activeTabName) {
   const panelTitle = document.getElementById('panelTitle');
   if (panelTitle) {
-    panelTitle.textContent = titleMap[normalizedTabName] || '웹 도우미';
+    panelTitle.textContent = PANEL_TITLES[activeTabName] || PANEL_TITLES[DEFAULT_MAIN_TAB];
   }
+}
 
-  await chrome.storage.session.set({ [SESSION_KEY]: tabName === 'history' ? 'history' : normalizedTabName });
+export async function switchTab(tabName) {
+  const requestedTabName = tabName || DEFAULT_MAIN_TAB;
+  const normalizedTabName = ['history', 'text', 'quickTranslate', 'page'].includes(requestedTabName)
+    ? 'translate'
+    : requestedTabName;
+  const translatePanel = normalizedTabName === 'translate'
+    ? normalizeTranslatePanel(requestedTabName === 'translate' ? getActiveTranslateSubtab() : requestedTabName)
+    : getActiveTranslateSubtab();
+  const browserTab = await getCurrentBrowserTab();
 
-  if (normalizedTabName === 'translate') {
-    await switchTranslateSubtab(translatePanel || 'page');
-  }
+  updateMainTabButtons(normalizedTabName);
+  updateMainTabPanels(normalizedTabName);
+  updatePanelTitle(normalizedTabName);
 
-  if (normalizedTabName === 'settings') {
-    await loadSettings();
-  }
+  setActivePanelTab(normalizedTabName);
+  await chrome.storage.session.set({
+    [PANEL_SESSION_KEY]: getStoredPanelSessionValue(normalizedTabName, translatePanel)
+  });
 
-  if (normalizedTabName === 'search') {
-    initializeSearchTab();
-  }
-
-  if (normalizedTabName === 'quickTranslate') {
-    await initQuickTranslateTab();
-  }
+  await activateRegisteredTab(normalizedTabName, {
+    browserTab,
+    requestedTab: requestedTabName,
+    translatePanel: translatePanel || DEFAULT_TRANSLATE_PANEL
+  });
 }
 
 export function getActiveTranslateSubtab() {
   const activeButton = document.querySelector('[data-translate-panel][aria-selected="true"]');
-  return activeButton?.dataset.translatePanel || 'page';
+  return normalizeTranslatePanel(activeButton?.dataset.translatePanel);
 }
 
-export async function switchTranslateSubtab(panelName = 'page') {
-  const normalizedPanel = panelName === 'history' ? 'history' : 'page';
+export async function switchTranslateSubtab(panelName = DEFAULT_TRANSLATE_PANEL) {
+  const normalizedPanel = normalizeTranslatePanel(panelName);
   const { updateApiKeyUI, updatePageCacheStatus } = await import('./settings.js');
   const { renderHistoryList } = await import('./history.js');
+  const { refreshTranslationConfigUI } = await import('./translation.js');
+  const { initQuickTranslateTab } = await import('./quick-translate.js');
 
-  document.querySelectorAll('[data-translate-panel]').forEach((button) => {
-    button.setAttribute('aria-selected', button.dataset.translatePanel === normalizedPanel ? 'true' : 'false');
+  const buttons = document.querySelectorAll('[data-translate-panel]');
+  syncAriaTabButtons(buttons, (button) => button.dataset.translatePanel === normalizedPanel);
+
+  const panels = [
+    document.getElementById('translatePagePanel'),
+    document.getElementById('translateTextPanel'),
+    document.getElementById('translateHistoryPanel')
+  ].filter(Boolean);
+  syncActivePanels(panels, (panel) => panel.id === (
+    normalizedPanel === 'history'
+      ? 'translateHistoryPanel'
+      : normalizedPanel === 'text'
+        ? 'translateTextPanel'
+        : 'translatePagePanel'
+  ));
+
+  setActiveTranslatePanel(normalizedPanel);
+  await chrome.storage.session.set({
+    [PANEL_SESSION_KEY]: getStoredPanelSessionValue('translate', normalizedPanel)
   });
-
-  const pagePanel = document.getElementById('translatePagePanel');
-  const historyPanel = document.getElementById('translateHistoryPanel');
-
-  if (pagePanel) {
-    pagePanel.classList.toggle('active', normalizedPanel === 'page');
-  }
-  if (historyPanel) {
-    historyPanel.classList.toggle('active', normalizedPanel === 'history');
-  }
 
   if (normalizedPanel === 'history') {
     await renderHistoryList();
     return;
   }
 
+  if (normalizedPanel === 'text') {
+    await initQuickTranslateTab();
+    return;
+  }
+
+  await refreshTranslationConfigUI({ updateButtons: true });
   await updateApiKeyUI();
   await updatePageCacheStatus();
 }
 
 export async function restoreSession() {
   try {
-    const result = await chrome.storage.session.get(SESSION_KEY);
-    const lastTab = result[SESSION_KEY];
+    const result = await chrome.storage.session.get(PANEL_SESSION_KEY);
+    const lastTab = result[PANEL_SESSION_KEY];
     if (lastTab) {
       await switchTab(lastTab);
+      return;
     }
+
+    await switchTab(DEFAULT_MAIN_TAB);
   } catch (error) {
     logError('sidepanel', 'RESTORE_SESSION_FAILED', 'Session 복원 실패', {}, error);
+    await switchTab(DEFAULT_MAIN_TAB);
   }
 }
 
 export function handleDeepLink() {
   const hash = window.location.hash.slice(1);
   if (hash) {
-    switchTab(hash);
+    void switchTab(hash);
   }
 }
 
@@ -217,7 +278,7 @@ export function showToast(message, type = 'success') {
     toast.classList.add('error');
   }
 
-  setTimeout(() => {
+  window.setTimeout(() => {
     toast.classList.remove('show');
   }, 2000);
 }
@@ -244,33 +305,12 @@ export async function ensurePageContentScript(tabId) {
 }
 
 export function resetTranslateUI() {
-  translationState.state = 'inactive';
-  translationState.phase = 'idle';
-  translationState.priority = 0;
-  translationState.totalSegments = 0;
-  translationState.visibleSegments = 0;
-  translationState.translatedSegments = 0;
-  translationState.totalTexts = 0;
-  translationState.translatedCount = 0;
-  translationState.cachedCount = 0;
-  translationState.cacheHits = 0;
-  translationState.batchCount = 0;
-  translationState.batchesDone = 0;
-  translationState.batches = [];
-  translationState.activeRequests = 0;
-  translationState.etaMs = 0;
-  translationState.activeMs = 0;
-  translationState.provider = '';
-  translationState.model = '';
-  translationState.profile = 'fast';
-  translationState.originalTitle = '';
-  translationState.translatedTitle = '';
-  translationState.previewText = '';
-
+  setTranslationState(createDefaultTranslationState());
   updateUI();
 }
 
 export function updateUI(hasPermission = true) {
+  const currentState = getTranslationState();
   const {
     state,
     phase,
@@ -284,15 +324,15 @@ export function updateUI(hasPermission = true) {
     batchesDone,
     batches,
     activeMs
-  } = translationState;
+  } = currentState;
 
   const statusBadge = document.getElementById('statusBadge');
   const fastBtn = document.getElementById('fastTranslateBtn');
   const preciseBtn = document.getElementById('preciseTranslateBtn');
   const translateSection = document.getElementById('translateSection');
   const hasConfiguredApiKey = translateSection?.dataset.hasApiKey === 'true';
-  const activeProfile = translationState.profile === 'precise' ? 'precise' : 'fast';
-  const isTranslatedState = state === 'analyzing' || state === 'translating' || state === 'completed' || state === 'error';
+  const activeProfile = currentState.profile === 'precise' ? 'precise' : 'fast';
+  const isTranslatedState = ['analyzing', 'translating', 'completed', 'error'].includes(state);
   const fastToggleActive = hasPermission && activeProfile === 'fast' && isTranslatedState;
   const preciseToggleActive = hasPermission && activeProfile === 'precise' && isTranslatedState;
 
@@ -332,8 +372,8 @@ export function updateUI(hasPermission = true) {
     secondary: !preciseToggleActive
   });
 
-  const translatedValue = translatedSegments || translationState.translatedCount || 0;
-  const totalValue = totalSegments || translationState.totalTexts || 0;
+  const translatedValue = translatedSegments || currentState.translatedCount || 0;
+  const totalValue = totalSegments || currentState.totalTexts || 0;
   const visibleValue = visibleSegments || totalValue;
   const progressTextEl = document.getElementById('progressText');
 
@@ -370,12 +410,6 @@ export function updateUI(hasPermission = true) {
   }
 }
 
-function setButtonState(button, disabled) {
-  if (button) {
-    button.disabled = disabled;
-  }
-}
-
 function configureTranslationButton(button, options) {
   if (!button) {
     return;
@@ -392,14 +426,15 @@ function setStatusBadge(element, text, className) {
   if (!element) {
     return;
   }
+
   element.textContent = text;
   element.className = className;
 }
 
 function setText(id, value) {
-  const el = document.getElementById(id);
-  if (el) {
-    el.textContent = value;
+  const element = document.getElementById(id);
+  if (element) {
+    element.textContent = value;
   }
 }
 
@@ -428,6 +463,7 @@ export function formatTime(seconds) {
   if (seconds < 60) {
     return `${seconds}s`;
   }
+
   if (seconds < 3600) {
     const minutes = Math.floor(seconds / 60);
     const secs = seconds % 60;
@@ -441,13 +477,28 @@ export function formatTime(seconds) {
 
 export async function updateErrorLogCount() {
   try {
-    const allLogs = await getLogs();
-    if (!allLogs || allLogs.length === 0) {
-      return;
+    const errorLogs = await getLogEntries({ levels: ['ERROR', 'WARN'] });
+    const errorBtn = document.getElementById('copyErrorLogsBtn');
+    const badgeEl = document.getElementById('errorTabBadge');
+    const tabButton = document.querySelector('.vertical-tabbar button[data-tab="errors"]');
+    const countLabel = errorLogs.length > 99 ? '99+' : String(errorLogs.length);
+
+    if (badgeEl) {
+      badgeEl.hidden = errorLogs.length === 0;
+      badgeEl.textContent = countLabel;
     }
 
-    const errorLogs = allLogs.filter((logLine) => /\["ERROR"\]|\["WARN"\]|"level":"ERROR"|"level":"WARN"/.test(logLine));
-    const errorBtn = document.getElementById('copyErrorLogsBtn');
+    if (tabButton) {
+      tabButton.classList.toggle('has-errors', errorLogs.length > 0);
+      tabButton.title = errorLogs.length > 0 ? `오류 센터 (${errorLogs.length})` : '오류 센터';
+      tabButton.setAttribute(
+        'aria-label',
+        errorLogs.length > 0
+          ? `오류 센터, ${errorLogs.length}개의 오류 또는 경고`
+          : '오류 센터'
+      );
+    }
+
     if (errorBtn) {
       if (errorLogs.length > 0) {
         errorBtn.textContent = `오류 로그만 복사 (${errorLogs.length})`;
@@ -455,6 +506,8 @@ export async function updateErrorLogCount() {
         errorBtn.style.color = '#ef4444';
       } else {
         errorBtn.textContent = '오류 로그만 복사 (0)';
+        errorBtn.style.borderColor = '';
+        errorBtn.style.color = '';
       }
     }
   } catch (error) {

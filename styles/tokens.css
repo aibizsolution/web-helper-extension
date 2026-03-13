@@ -1,0 +1,54 @@
+/* Tokens */
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    :root {
+      /* 다크 테마 토큰 */
+      --bg-primary: #0B0B0F;
+      --bg-tabbar: #121418;
+      --bg-card: #16181C;
+      --bg-secondary: #121212;
+      --text-primary: #EDEEF0;
+      --text-secondary: #A9AFB8;
+      --text-disabled: #6B7280;
+      --border-color: rgba(255, 255, 255, 0.08);
+
+      /* 버튼 색상 */
+      --btn-primary-bg: #2A6CF0;
+      --btn-primary-hover: #245ED2;
+      --btn-secondary-bg: #1E2228;
+      --btn-secondary-hover: #252A31;
+
+      /* 상태 색상 */
+      --status-active: #2A6CF0;
+      --status-success: #10b981;
+      --status-warning: #f59e0b;
+      --status-error: #ef4444;
+
+      /* Spacing 토큰 (8px 시스템) */
+      --space-xs: 8px;    /* 아주 작은 간격 */
+      --space-sm: 12px;   /* 작은 간격 */
+      --space-md: 16px;   /* 기본 간격 */
+      --space-lg: 20px;   /* 큰 간격 */
+      --space-xl: 24px;   /* 더 큰 간격 */
+      --space-2xl: 32px;  /* 섹션 간격 */
+
+      /* 기타 */
+      --shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
+      --radius-md: 12px;
+      --radius-lg: 16px;
+      --tabbar-width: 60px;
+    }
+
+    html, body {
+      height: 100%;
+      overflow: hidden;
+      background: var(--bg-primary);
+      color: var(--text-primary);
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      font-size: 14px;
+      line-height: 1.5;
+    }

@@ -4,2330 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>웹 도우미</title>
-  <style>
-    * {
-      margin: 0;
-      padding: 0;
-      box-sizing: border-box;
-    }
-
-    :root {
-      /* 다크 테마 토큰 */
-      --bg-primary: #0B0B0F;
-      --bg-tabbar: #121418;
-      --bg-card: #16181C;
-      --bg-secondary: #121212;
-      --text-primary: #EDEEF0;
-      --text-secondary: #A9AFB8;
-      --text-disabled: #6B7280;
-      --border-color: rgba(255, 255, 255, 0.08);
-
-      /* 버튼 색상 */
-      --btn-primary-bg: #2A6CF0;
-      --btn-primary-hover: #245ED2;
-      --btn-secondary-bg: #1E2228;
-      --btn-secondary-hover: #252A31;
-
-      /* 상태 색상 */
-      --status-active: #2A6CF0;
-      --status-success: #10b981;
-      --status-warning: #f59e0b;
-      --status-error: #ef4444;
-
-      /* Spacing 토큰 (8px 시스템) */
-      --space-xs: 8px;    /* 아주 작은 간격 */
-      --space-sm: 12px;   /* 작은 간격 */
-      --space-md: 16px;   /* 기본 간격 */
-      --space-lg: 20px;   /* 큰 간격 */
-      --space-xl: 24px;   /* 더 큰 간격 */
-      --space-2xl: 32px;  /* 섹션 간격 */
-
-      /* 기타 */
-      --shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
-      --radius-md: 12px;
-      --radius-lg: 16px;
-      --tabbar-width: 60px;
-    }
-
-    html, body {
-      height: 100%;
-      overflow: hidden;
-      background: var(--bg-primary);
-      color: var(--text-primary);
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-      font-size: 14px;
-      line-height: 1.5;
-    }
-
-    /* 패널 전체 레이아웃: 좌측(컨텐츠) + 우측(탭바) */
-    .panel-container {
-      display: flex;
-      height: 100vh;
-    }
-
-    /* 좌측 컨텐츠 영역 */
-    .content-area {
-      flex: 1;
-      display: flex;
-      flex-direction: column;
-      overflow: hidden;
-    }
-
-    /* 헤더 (고정) */
-    .panel-header {
-      padding: var(--space-lg);
-      border-bottom: 1px solid var(--border-color);
-      flex-shrink: 0;
-    }
-
-    .panel-header h1 {
-      font-size: 18px;
-      font-weight: 700;
-      color: var(--text-primary);
-    }
-
-    /* 메인 컨텐츠 (스크롤) */
-    .panel-main {
-      flex: 1;
-      overflow-y: auto;
-      padding: var(--space-lg);
-      /* 다크 스크롤바 */
-      scrollbar-width: thin;
-      scrollbar-color: #2A2F38 #0F1115;
-    }
-
-    /* 웹킷 브라우저 스크롤바 */
-    .panel-main::-webkit-scrollbar {
-      width: 10px;
-    }
-
-    .panel-main::-webkit-scrollbar-track {
-      background: #0F1115;
-      border-left: 1px solid var(--border-color);
-    }
-
-    .panel-main::-webkit-scrollbar-thumb {
-      background: #2A2F38;
-      border-radius: 9999px;
-      border: 2px solid #0F1115;
-    }
-
-    .panel-main::-webkit-scrollbar-thumb:hover {
-      background: #39404C;
-    }
-
-    /* 푸터 (고정) */
-    .panel-footer {
-      padding: var(--space-md) var(--space-lg);
-      border-top: 1px solid var(--border-color);
-      text-align: center;
-      flex-shrink: 0;
-    }
-
-    .panel-footer-text {
-      font-size: 11px;
-      color: var(--text-secondary);
-      line-height: 1.5;
-    }
-
-    /* 우측 세로 탭바 */
-    .vertical-tabbar {
-      width: var(--tabbar-width);
-      background: var(--bg-tabbar);
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      padding: var(--space-sm) 0;
-      gap: var(--space-xs);
-      flex-shrink: 0;
-      border-left: 1px solid var(--border-color);
-    }
-
-    .vertical-tabbar .tabbar-divider {
-      width: 40px;
-      height: 1px;
-      background: var(--border-color);
-      border-radius: 9999px;
-    }
-
-    .vertical-tabbar .tabbar-divider[role="presentation"] {
-      pointer-events: none;
-    }
-
-    .vertical-tabbar button {
-      position: relative;
-      width: 100%;
-      height: 64px;
-      background: transparent;
-      border: none;
-      color: var(--text-secondary);
-      cursor: pointer;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      gap: 4px;
-      transition: all 0.2s;
-      padding: 8px;
-    }
-
-    .vertical-tabbar button:hover {
-      background: rgba(255, 255, 255, 0.05);
-    }
-
-    /* 키보드 탐색 시에만 포커스 표시 (마우스 클릭 시 잔상 제거) */
-    .vertical-tabbar button:focus {
-      outline: none;
-    }
-
-    .vertical-tabbar button:focus-visible {
-      outline: 2px solid rgba(42, 108, 240, 0.6);
-      outline-offset: -2px;
-    }
-
-    /* 활성 탭 표시 (좌측 인디케이터) */
-    .vertical-tabbar button[aria-selected="true"]::before {
-      content: '';
-      position: absolute;
-      left: 0;
-      top: 50%;
-      transform: translateY(-50%);
-      width: 2px;
-      height: 32px;
-      background: var(--status-active);
-      border-radius: 0 2px 2px 0;
-    }
-
-    .vertical-tabbar button[aria-selected="true"] {
-      color: var(--text-primary);
-    }
-
-    /* 아이콘 */
-    .vertical-tabbar button svg {
-      width: 22px;
-      height: 22px;
-      fill: currentColor;
-    }
-
-    /* 라벨 */
-    .vertical-tabbar button span {
-      font-size: 11px;
-      text-align: center;
-      white-space: nowrap;
-    }
-
-
-    /* 탭 컨텐츠 */
-    .tab-content {
-      display: none;
-    }
-
-    .tab-content.active {
-      display: block;
-    }
-
-    /* ===== 히스토리 탭 스타일 ===== */
-    .history-card {
-      background: var(--bg-card);
-      border: 1px solid var(--border-color);
-      border-radius: var(--radius-lg);
-      padding: var(--space-lg);
-      margin-bottom: var(--space-md);
-      box-shadow: var(--shadow);
-      display: flex;
-      flex-direction: column;
-      gap: var(--space-md);
-    }
-
-    .history-header {
-      display: flex;
-      align-items: flex-start;
-      justify-content: space-between;
-      gap: var(--space-sm);
-    }
-
-    .history-title {
-      font-size: 16px;
-      font-weight: 700;
-      color: var(--text-primary);
-      margin: 0;
-    }
-
-    .history-subtitle {
-      font-size: 12px;
-      color: var(--text-secondary);
-      margin-top: 4px;
-      line-height: 1.5;
-    }
-
-    .history-clear-btn {
-      background: var(--bg-secondary);
-      color: var(--text-secondary);
-      border: 1px solid var(--border-color);
-      border-radius: var(--radius-md);
-      padding: 8px 14px;
-      font-size: 12px;
-      font-weight: 600;
-      cursor: pointer;
-      transition: all 0.2s;
-      white-space: nowrap;
-    }
-
-    .history-clear-btn:hover:not(:disabled) {
-      background: var(--btn-secondary-hover);
-      color: var(--text-primary);
-    }
-
-    .history-clear-btn:disabled {
-      opacity: 0.5;
-      cursor: not-allowed;
-    }
-
-    .history-clear-btn.confirm-mode {
-      background: rgba(239, 68, 68, 0.15);
-      color: var(--status-error);
-      border-color: var(--status-error);
-    }
-
-    .history-clear-btn.confirm-mode:hover:not(:disabled) {
-      background: rgba(239, 68, 68, 0.25);
-      color: #fca5a5;
-    }
-
-    .history-list {
-      display: flex;
-      flex-direction: column;
-      gap: var(--space-sm);
-    }
-
-    .history-item {
-      display: flex;
-      align-items: flex-start;
-      justify-content: space-between;
-      gap: var(--space-sm);
-      padding: var(--space-md);
-      border-radius: var(--radius-md);
-      border: 1px solid var(--border-color);
-      background: var(--bg-secondary);
-      cursor: pointer;
-      transition: background 0.2s, border-color 0.2s;
-      outline: none;
-    }
-
-    .history-item:hover {
-      background: rgba(42, 108, 240, 0.12);
-      border-color: rgba(42, 108, 240, 0.4);
-    }
-
-    .history-item:focus-visible {
-      outline: 2px solid rgba(42, 108, 240, 0.6);
-      outline-offset: 2px;
-    }
-
-    .history-item-body {
-      flex: 1;
-      display: flex;
-      flex-direction: column;
-      gap: 6px;
-      overflow: hidden;
-    }
-
-    .history-item-title {
-      font-size: 14px;
-      font-weight: 600;
-      color: var(--text-primary);
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
-    }
-
-    .history-item-subtitle {
-      font-size: 12px;
-      color: var(--text-secondary);
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
-    }
-
-    .history-item-meta {
-      display: flex;
-      flex-wrap: wrap;
-      gap: var(--space-xs);
-      font-size: 11px;
-      color: var(--text-secondary);
-    }
-
-    .history-item-meta span {
-      display: inline-flex;
-      align-items: center;
-      gap: 4px;
-    }
-
-    .history-item-delete {
-      width: 32px;
-      height: 32px;
-      border-radius: 9999px;
-      background: rgba(255, 255, 255, 0.04);
-      border: 1px solid var(--border-color);
-      color: var(--text-secondary);
-      cursor: pointer;
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      transition: all 0.2s;
-      flex-shrink: 0;
-    }
-
-    .history-item-delete:hover {
-      background: rgba(239, 68, 68, 0.2);
-      border-color: rgba(239, 68, 68, 0.4);
-      color: #fca5a5;
-    }
-
-    .history-empty {
-      padding: var(--space-2xl) var(--space-lg);
-      border-radius: var(--radius-md);
-      border: 1px dashed rgba(255, 255, 255, 0.12);
-      background: rgba(18, 20, 24, 0.8);
-      text-align: center;
-      color: var(--text-secondary);
-      display: none;
-      flex-direction: column;
-      gap: var(--space-sm);
-      align-items: center;
-    }
-
-    .history-empty-icon {
-      font-size: 36px;
-    }
-
-    .history-empty p {
-      font-size: 13px;
-      line-height: 1.6;
-    }
-
-    /* 카드 스타일 */
-    .main-card {
-      background: var(--bg-card);
-      border: 1px solid var(--border-color);
-      border-radius: var(--radius-lg);
-      padding: var(--space-lg);
-      margin-bottom: var(--space-md);
-      box-shadow: var(--shadow);
-    }
-
-    .translation-shell {
-      display: flex;
-      flex-direction: column;
-      gap: 12px;
-    }
-
-    .translation-shell .main-card {
-      margin-bottom: 0;
-    }
-
-    .translate-subtabs {
-      display: flex;
-      align-items: flex-end;
-      gap: 2px;
-      margin-bottom: 14px;
-      padding: 0 2px;
-      border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-    }
-
-    .translate-subtab {
-      position: relative;
-      width: auto;
-      min-width: 88px;
-      min-height: 40px;
-      margin: 0;
-      padding: 0 14px 10px;
-      border-radius: 0;
-      border: none;
-      background: transparent;
-      color: var(--text-secondary);
-      font-size: 13px;
-      font-weight: 700;
-      cursor: pointer;
-      transition: all 0.2s ease;
-    }
-
-    .translate-subtab:hover {
-      color: var(--text-primary);
-    }
-
-    .translate-subtab:focus-visible {
-      outline: 2px solid rgba(42, 108, 240, 0.55);
-      outline-offset: -2px;
-      border-radius: 8px 8px 0 0;
-    }
-
-    .translate-subtab::after {
-      content: '';
-      position: absolute;
-      left: 12px;
-      right: 12px;
-      bottom: -1px;
-      height: 2px;
-      border-radius: 999px 999px 0 0;
-      background: transparent;
-      transition: background 0.2s ease;
-    }
-
-    .translate-subtab[aria-selected="true"] {
-      color: var(--text-primary);
-    }
-
-    .translate-subtab[aria-selected="true"]::after {
-      background: linear-gradient(90deg, rgba(109, 172, 255, 0.95) 0%, rgba(42, 108, 240, 1) 100%);
-    }
-
-    .translate-panel {
-      display: none;
-    }
-
-    .translate-panel.active {
-      display: block;
-    }
-
-    .translation-engine-card {
-      position: relative;
-      overflow: hidden;
-      padding: 14px;
-      border-radius: var(--radius-lg);
-      border: 1px solid rgba(92, 145, 255, 0.24);
-      background:
-        linear-gradient(180deg, rgba(42, 108, 240, 0.14) 0%, rgba(42, 108, 240, 0.06) 38%, rgba(11, 11, 15, 0.2) 100%);
-      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
-    }
-
-    .translation-engine-card::after {
-      content: '';
-      position: absolute;
-      right: -48px;
-      bottom: -56px;
-      width: 140px;
-      height: 140px;
-      background: radial-gradient(circle, rgba(42, 108, 240, 0.24) 0%, rgba(42, 108, 240, 0) 70%);
-      pointer-events: none;
-    }
-
-    .translation-engine-header {
-      position: relative;
-      z-index: 1;
-      display: flex;
-      align-items: flex-start;
-      justify-content: space-between;
-      gap: var(--space-md);
-      margin-bottom: 10px;
-    }
-
-    .translation-engine-title {
-      margin: 0;
-      font-size: 16px;
-      font-weight: 700;
-      color: var(--text-primary);
-    }
-
-    .translation-engine-title-row {
-      display: inline-flex;
-      align-items: center;
-      gap: 8px;
-    }
-
-    .translation-engine-description {
-      margin-top: 4px;
-      max-width: none;
-      color: var(--text-secondary);
-      font-size: 11px;
-      line-height: 1.5;
-    }
-
-    .translation-engine-badge {
-      position: relative;
-      z-index: 1;
-      flex-shrink: 0;
-      padding: 6px 10px;
-      border-radius: 999px;
-      border: 1px solid rgba(255, 255, 255, 0.08);
-      background: rgba(13, 18, 28, 0.72);
-      color: var(--text-primary);
-      font-size: 12px;
-      font-weight: 600;
-      white-space: nowrap;
-    }
-
-    .translation-status-card {
-      display: flex;
-      flex-direction: column;
-      gap: 14px;
-      padding: 14px;
-    }
-
-    .translation-status-card .status-header {
-      margin-bottom: 0;
-    }
-
-    .translation-status-overview {
-      display: flex;
-      flex-direction: column;
-      gap: 6px;
-    }
-
-    .translation-status-card .progress-text {
-      margin-bottom: 0;
-    }
-
-    .translation-status-card .translation-phase {
-      margin-top: 0;
-      margin-bottom: 0;
-    }
-
-    .translation-status-card .batch-info {
-      margin-top: 0;
-      margin-bottom: 0;
-    }
-
-    .translation-engine-grid {
-      position: relative;
-      z-index: 1;
-      display: grid;
-      grid-template-columns: 1fr;
-      gap: 0;
-    }
-
-    .translation-engine-field {
-      display: grid;
-      grid-template-columns: 96px minmax(0, 1fr);
-      align-items: center;
-      gap: 10px;
-      min-height: 48px;
-      padding: 10px 0;
-      border-top: 1px solid rgba(255, 255, 255, 0.08);
-      background: transparent;
-    }
-
-    .translation-engine-field:first-child {
-      border-top: 0;
-      padding-top: 0;
-    }
-
-    .translation-engine-field.model-field {
-      grid-column: auto;
-    }
-
-    .translation-engine-field label {
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-      margin: 0;
-      color: var(--text-secondary);
-      font-size: 11px;
-      font-weight: 700;
-      letter-spacing: 0.06em;
-      white-space: nowrap;
-    }
-
-    .translation-engine-select-wrap {
-      position: relative;
-      min-width: 0;
-    }
-
-    .translation-engine-select-wrap::after {
-      content: '';
-      position: absolute;
-      right: 14px;
-      top: 50%;
-      width: 8px;
-      height: 8px;
-      border-right: 1.5px solid var(--text-secondary);
-      border-bottom: 1.5px solid var(--text-secondary);
-      transform: translateY(-65%) rotate(45deg);
-      pointer-events: none;
-    }
-
-    .translation-engine-select {
-      width: 100%;
-      appearance: none;
-      -webkit-appearance: none;
-      -moz-appearance: none;
-      min-height: 36px;
-      padding: 0 36px 0 12px;
-      border-radius: 10px;
-      border: 1px solid rgba(255, 255, 255, 0.1);
-      background: rgba(255, 255, 255, 0.04);
-      color: var(--text-primary);
-      font-size: 12px;
-      font-weight: 600;
-      line-height: 1.2;
-      transition: border-color 0.2s, box-shadow 0.2s, background 0.2s;
-    }
-
-    .translation-engine-select:hover {
-      background: rgba(255, 255, 255, 0.06);
-      border-color: rgba(255, 255, 255, 0.18);
-    }
-
-    .translation-engine-select:focus {
-      outline: none;
-      border-color: rgba(42, 108, 240, 0.85);
-      box-shadow: 0 0 0 3px rgba(42, 108, 240, 0.16);
-    }
-
-    .translation-engine-select option {
-      background: #12161e;
-      color: var(--text-primary);
-    }
-
-    .translation-engine-field .translation-tooltip-icon {
-      flex: 0 0 auto;
-      width: 16px;
-      height: 16px;
-      font-size: 10px;
-    }
-
-    .translation-engine-summary {
-      position: relative;
-      z-index: 1;
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      margin-top: 8px;
-      padding-top: 10px;
-      min-height: 20px;
-      border-top: 1px solid rgba(255, 255, 255, 0.08);
-    }
-
-    .translation-engine-summary-head {
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-    }
-
-    .translation-engine-summary-label {
-      color: #8fb4ff;
-      font-size: 11px;
-      font-weight: 700;
-      letter-spacing: 0.06em;
-    }
-
-    .translation-engine-inline-note {
-      display: inline-flex;
-      align-items: center;
-      min-height: 22px;
-      padding: 0 8px;
-      border-radius: 999px;
-      border: 1px solid rgba(251, 191, 36, 0.18);
-      background: rgba(120, 53, 15, 0.18);
-      color: #fde68a;
-      font-size: 11px;
-      font-weight: 600;
-      line-height: 1;
-      white-space: nowrap;
-    }
-
-    .translation-tooltip-icon {
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      width: 18px;
-      height: 18px;
-      border-radius: 999px;
-      border: 1px solid rgba(143, 180, 255, 0.28);
-      background: rgba(255, 255, 255, 0.06);
-      color: #8fb4ff;
-      font-size: 11px;
-      font-weight: 800;
-      line-height: 1;
-      cursor: help;
-      opacity: 0.9;
-    }
-
-    .translation-tooltip-icon:hover,
-    .translation-tooltip-icon:focus-visible {
-      opacity: 1;
-      outline: none;
-      border-color: rgba(143, 180, 255, 0.52);
-      background: rgba(42, 108, 240, 0.16);
-    }
-
-    .translation-engine-note {
-      width: 100%;
-      margin-top: 2px;
-      color: var(--text-secondary);
-      font-size: 11px;
-      line-height: 1.5;
-    }
-
-    .translation-action-grid {
-      position: relative;
-      z-index: 1;
-      display: grid;
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-      gap: 8px;
-      margin-top: 10px;
-      padding-top: 10px;
-      border-top: 1px solid rgba(255, 255, 255, 0.08);
-    }
-
-    .translation-action-grid .btn {
-      min-height: 42px;
-      margin-bottom: 0;
-      padding: 10px 12px;
-      font-size: 13px;
-    }
-
-    .translation-action-grid .btn.toggle-active {
-      background: rgba(42, 108, 240, 0.18);
-      color: #dbeafe;
-      border: 1px solid rgba(96, 165, 250, 0.45);
-      box-shadow: inset 0 0 0 1px rgba(147, 197, 253, 0.12);
-    }
-
-    .translation-action-grid .btn.toggle-active:hover:not(:disabled) {
-      background: rgba(42, 108, 240, 0.26);
-    }
-
-    .translation-action-note {
-      position: relative;
-      z-index: 1;
-      margin-top: 8px;
-      color: var(--text-secondary);
-      font-size: 11px;
-      line-height: 1.45;
-    }
-
-    .permission-card {
-      background: var(--bg-card);
-      border: 1px solid var(--border-color);
-      border-radius: var(--radius-lg);
-      padding: var(--space-2xl) var(--space-lg);
-      margin-bottom: var(--space-md);
-      box-shadow: var(--shadow);
-      text-align: center;
-    }
-
-    .permission-icon {
-      font-size: 48px;
-      margin-bottom: var(--space-md);
-    }
-
-    .permission-message {
-      font-size: 14px;
-      color: var(--text-secondary);
-      margin-bottom: var(--space-lg);
-      line-height: 1.6;
-    }
-
-    /* 상태 헤더 */
-    .status-header {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      margin-bottom: var(--space-md);
-    }
-
-    .status-label {
-      font-size: 14px;
-      color: var(--text-secondary);
-      font-weight: 500;
-    }
-
-    .status-badge {
-      padding: 6px 12px;
-      border-radius: 8px;
-      font-size: 12px;
-      font-weight: 600;
-      background: var(--bg-secondary);
-      color: var(--text-secondary);
-      border: 1px solid var(--border-color);
-    }
-
-    .status-badge.active {
-      background: rgba(42, 108, 240, 0.15);
-      color: var(--status-active);
-      border-color: var(--status-active);
-    }
-
-    .status-badge.paused {
-      background: rgba(245, 158, 11, 0.15);
-      color: var(--status-warning);
-      border-color: var(--status-warning);
-    }
-
-    .status-badge.restored {
-      background: rgba(107, 114, 128, 0.15);
-      color: var(--text-disabled);
-      border-color: var(--border-color);
-    }
-
-    .status-badge.disabled {
-      background: rgba(239, 68, 68, 0.15);
-      color: #ef4444;
-      border-color: #ef4444;
-    }
-
-    /* (삭제됨) 번역 초기화 버튼 스타일 */
-
-    /* 통계 그리드 */
-    .stats-grid {
-      display: grid;
-      grid-template-columns: repeat(2, 1fr);
-      gap: var(--space-sm);
-      margin-bottom: var(--space-lg);
-    }
-
-    .stat-card {
-      background: var(--bg-secondary);
-      padding: var(--space-md);
-      border-radius: var(--radius-md);
-      border: 1px solid var(--border-color);
-    }
-
-    .stat-label {
-      font-size: 12px;
-      color: var(--text-secondary);
-      margin-bottom: 6px;
-      font-weight: 500;
-    }
-
-    .stat-value {
-      font-size: 24px;
-      font-weight: 700;
-      color: var(--text-primary);
-    }
-
-    /* 버튼 */
-    .btn {
-      width: 100%;
-      padding: var(--space-sm) var(--space-lg);
-      background: var(--btn-primary-bg);
-      color: #FFFFFF;
-      border: none;
-      border-radius: var(--radius-md);
-      font-size: 14px;
-      font-weight: 600;
-      cursor: pointer;
-      transition: all 0.2s;
-      box-shadow: var(--shadow);
-      margin-bottom: var(--space-sm);
-    }
-
-    /* 아이콘 버튼 */
-    .icon-btn {
-      width: 32px;
-      height: 32px;
-      border-radius: 8px;
-      background: rgba(255, 255, 255, 0.04);
-      border: 1px solid var(--border-color);
-      color: var(--text-secondary);
-      cursor: pointer;
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      transition: all 0.2s;
-      flex-shrink: 0;
-      padding: 0;
-    }
-
-    .icon-btn:hover {
-      background: rgba(239, 68, 68, 0.15);
-      border-color: rgba(239, 68, 68, 0.4);
-      color: #fca5a5;
-    }
-
-    .icon-btn:active {
-      transform: scale(0.95);
-    }
-
-    .icon-btn svg {
-      width: 18px;
-      height: 18px;
-      fill: currentColor;
-    }
-
-    .btn:hover:not(:disabled) {
-      background: var(--btn-primary-hover);
-    }
-
-    .btn:active:not(:disabled) {
-      transform: translateY(1px);
-    }
-
-    .btn.secondary {
-      background: var(--btn-secondary-bg);
-      color: var(--text-primary);
-      border: 1px solid var(--border-color);
-    }
-
-    .btn.secondary:hover:not(:disabled) {
-      background: var(--btn-secondary-hover);
-    }
-
-    .btn:disabled {
-      opacity: 0.5;
-      cursor: not-allowed;
-    }
-
-    .btn-group {
-      margin-bottom: var(--space-md);
-    }
-
-    .permission-actions {
-      display: grid;
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-      gap: 8px;
-      margin-top: 12px;
-    }
-
-    .permission-actions .btn {
-      margin-bottom: 0;
-      min-height: 42px;
-    }
-
-    .btn-help {
-      font-size: 12px;
-      color: var(--text-secondary);
-      margin-top: 6px;
-      line-height: 1.4;
-      padding-left: 4px;
-    }
-
-    /* 진행률 텍스트 */
-    .progress-text {
-      font-size: 13px;
-      color: var(--text-secondary);
-      text-align: center;
-      margin-bottom: var(--space-md);
-    }
-
-    .translation-phase {
-      margin-top: -6px;
-      margin-bottom: 10px;
-      color: var(--text-secondary);
-      font-size: 12px;
-      text-align: center;
-    }
-
-    .translation-stats {
-      margin-bottom: 0;
-    }
-
-    .translation-stats .stat-card {
-      padding: 12px;
-    }
-
-    .translation-stats .stat-value {
-      font-size: 20px;
-    }
-
-    /* 배치 정보 */
-    .batch-info {
-      background: var(--bg-secondary);
-      padding: var(--space-md);
-      border-radius: var(--radius-md);
-      border-left: 3px solid var(--status-active);
-      margin-top: var(--space-md);
-      margin-bottom: var(--space-md);
-    }
-
-    .batch-info-title {
-      font-size: 13px;
-      color: var(--text-secondary);
-      margin-bottom: var(--space-sm);
-      font-weight: 500;
-    }
-
-    .batch-item {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      padding: var(--space-xs) 0;
-      border-bottom: 1px solid var(--border-color);
-    }
-
-    .batch-item:last-child {
-      border-bottom: none;
-    }
-
-    .batch-name {
-      font-size: 13px;
-      color: var(--text-primary);
-    }
-
-    .batch-status {
-      font-size: 12px;
-      padding: 4px 8px;
-      border-radius: 6px;
-      font-weight: 600;
-    }
-
-    .batch-status.pending {
-      background: rgba(148, 163, 184, 0.15);
-      color: var(--text-secondary);
-    }
-
-    .batch-status.processing {
-      background: rgba(42, 108, 240, 0.15);
-      color: var(--status-active);
-    }
-
-    .batch-status.completed {
-      background: rgba(16, 185, 129, 0.15);
-      color: var(--status-success);
-    }
-
-    .batch-status.failed {
-      background: rgba(239, 68, 68, 0.15);
-      color: var(--status-error);
-    }
-
-    /* 애니메이션 */
-    @keyframes pulse {
-      0%, 100% { opacity: 1; }
-      50% { opacity: 0.7; }
-    }
-
-    .pulse {
-      animation: pulse 2s ease-in-out infinite;
-    }
-
-    /* 가이드 섹션 */
-    .guide-section {
-      background: var(--bg-card);
-      border: 1px solid var(--border-color);
-      border-radius: var(--radius-lg);
-      padding: var(--space-lg);
-      margin-top: var(--space-md);
-      box-shadow: var(--shadow);
-    }
-
-    .guide-title {
-      font-size: 15px;
-      font-weight: 600;
-      color: var(--text-primary);
-      margin-bottom: var(--space-sm);
-    }
-
-    .guide-list {
-      list-style: none;
-      padding-left: 0;
-    }
-
-    .guide-list li {
-      font-size: 13px;
-      color: var(--text-secondary);
-      margin-bottom: var(--space-xs);
-      padding-left: var(--space-lg);
-      position: relative;
-      line-height: 1.6;
-    }
-
-    .guide-list li:before {
-      content: "•";
-      position: absolute;
-      left: 6px;
-      color: var(--status-active);
-      font-weight: bold;
-    }
-
-    .guide-list li:last-child {
-      margin-bottom: 0;
-    }
-
-    /* ===== 설정 탭 스타일 ===== */
-    .settings-section {
-      background: var(--bg-card);
-      border: 1px solid var(--border-color);
-      border-radius: var(--radius-lg);
-      padding: var(--space-lg);
-      margin-bottom: var(--space-md);
-      box-shadow: var(--shadow);
-    }
-
-    .settings-title {
-      font-size: 15px;
-      font-weight: 600;
-      color: var(--text-primary);
-      margin-bottom: var(--space-md);
-      display: flex;
-      align-items: center;
-      gap: var(--space-xs);
-    }
-
-    .settings-title::before {
-      content: '';
-      width: 3px;
-      height: 18px;
-      background: var(--status-active);
-      border-radius: 2px;
-    }
-
-    .form-group {
-      margin-bottom: var(--space-lg);
-    }
-
-    .form-group:last-child {
-      margin-bottom: 0;
-    }
-
-    .form-group-header {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 12px;
-      margin-bottom: var(--space-xs);
-    }
-
-    .form-group label {
-      display: block;
-      margin-bottom: 0;
-      font-weight: 500;
-      font-size: 13px;
-      color: var(--text-primary);
-    }
-
-    .form-group-link {
-      flex-shrink: 0;
-      font-size: 11px;
-      font-weight: 600;
-      color: var(--status-active);
-      text-decoration: none;
-      white-space: nowrap;
-    }
-
-    .form-group-link:hover {
-      text-decoration: underline;
-    }
-
-    .form-group input[type="password"],
-    .form-group input[type="text"],
-    .form-group input[type="number"] {
-      width: 100%;
-      padding: 10px 14px;
-      background: var(--bg-primary);
-      border: 1px solid var(--border-color);
-      border-radius: var(--radius-md);
-      color: var(--text-primary);
-      font-size: 13px;
-      transition: all 0.2s;
-      font-family: 'Consolas', 'Monaco', monospace;
-    }
-
-    .form-group input[type="number"] {
-      width: 100px;
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-    }
-
-    .form-group input:focus {
-      outline: none;
-      border-color: var(--status-active);
-      box-shadow: 0 0 0 3px rgba(42, 108, 240, 0.1);
-    }
-
-    .form-help {
-      font-size: 11px;
-      color: var(--text-secondary);
-      margin-top: 6px;
-      line-height: 1.5;
-    }
-
-    .form-help a {
-      color: var(--status-active);
-      text-decoration: none;
-    }
-
-    .form-help a:hover {
-      text-decoration: underline;
-    }
-
-    .settings-control-stack {
-      display: flex;
-      flex-direction: column;
-      gap: 0;
-      border-radius: 16px;
-      border: 1px solid rgba(255, 255, 255, 0.08);
-      background: rgba(9, 12, 17, 0.72);
-      overflow: hidden;
-    }
-
-    .settings-control-card {
-      padding: 14px;
-      border-top: 1px solid rgba(255, 255, 255, 0.07);
-      background: transparent;
-    }
-
-    .settings-control-card:first-child {
-      border-top: none;
-    }
-
-    .settings-control-row {
-      display: grid;
-      grid-template-columns: minmax(0, 1fr) auto;
-      align-items: center;
-      gap: 12px;
-    }
-
-    .settings-select-row {
-      grid-template-columns: minmax(0, 1fr) minmax(170px, 220px);
-    }
-
-    .settings-control-label {
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-      margin: 0;
-      font-size: 13px;
-      font-weight: 600;
-      color: var(--text-primary);
-    }
-
-    .settings-control-card .translation-tooltip-icon {
-      width: 16px;
-      height: 16px;
-      font-size: 10px;
-    }
-
-    .settings-select-wrap {
-      width: 100%;
-    }
-
-    .settings-compact-select {
-      min-height: 36px;
-    }
-
-    .settings-shortcut-actions {
-      display: inline-flex;
-      align-items: center;
-      justify-content: flex-end;
-      gap: 8px;
-      min-width: 0;
-      flex-wrap: wrap;
-    }
-
-    .settings-shortcut-value {
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      min-height: 36px;
-      padding: 0 12px;
-      border-radius: 10px;
-      border: 1px solid rgba(255, 255, 255, 0.1);
-      background: rgba(255, 255, 255, 0.04);
-      color: var(--text-primary);
-      font-size: 12px;
-      font-weight: 700;
-      letter-spacing: 0.02em;
-      white-space: nowrap;
-    }
-
-    .settings-control-row .toggle-switch {
-      justify-self: end;
-    }
-
-    .settings-shortcut-value.is-empty {
-      color: var(--text-secondary);
-      font-weight: 600;
-    }
-
-    .settings-inline-btn {
-      width: auto;
-      min-height: 36px;
-      margin: 0;
-      padding: 0 12px;
-      border-radius: 10px;
-      font-size: 12px;
-      white-space: nowrap;
-    }
-
-    /* 토글 스위치 (44×24) */
-    .toggle-group {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      padding: 10px 0;
-    }
-
-    .toggle-group label {
-      margin: 0;
-      font-size: 13px;
-      color: var(--text-primary);
-    }
-
-    .toggle-switch {
-      position: relative;
-      width: 44px;
-      height: 24px;
-      cursor: pointer;
-      flex-shrink: 0;
-    }
-
-    .toggle-switch input {
-      position: absolute;
-      opacity: 0;
-      width: 0;
-      height: 0;
-    }
-
-    .toggle-switch input:focus + .toggle-slider {
-      outline: 2px solid rgba(42, 108, 240, 0.6);
-      outline-offset: 2px;
-    }
-
-    .toggle-slider {
-      position: absolute;
-      top: 0;
-      left: 0;
-      right: 0;
-      bottom: 0;
-      background: var(--border-color);
-      border-radius: 24px;
-      transition: all 0.3s;
-    }
-
-    .toggle-slider::before {
-      content: '';
-      position: absolute;
-      height: 18px;
-      width: 18px;
-      left: 3px;
-      bottom: 3px;
-      background: white;
-      border-radius: 50%;
-      transition: all 0.3s;
-    }
-
-    .toggle-switch input:checked + .toggle-slider {
-      background: var(--status-active);
-    }
-
-    .toggle-switch input:checked + .toggle-slider::before {
-      transform: translateX(20px);
-    }
-
-    .inline-setting {
-      display: flex;
-      align-items: center;
-      gap: var(--space-sm);
-      margin-top: var(--space-xs);
-    }
-
-    .inline-setting label {
-      margin: 0;
-      color: var(--text-secondary);
-      font-size: 12px;
-      flex: 1;
-    }
-
-    @media (max-width: 420px) {
-      .translation-engine-header {
-        flex-direction: column;
-      }
-
-      .translation-engine-badge {
-        align-self: flex-start;
-      }
-
-      .translation-engine-grid {
-        grid-template-columns: 1fr;
-      }
-
-      .translation-engine-field.model-field {
-        grid-column: auto;
-      }
-
-      .translation-action-grid,
-      .permission-actions {
-        grid-template-columns: 1fr;
-      }
-    }
-
-    .ttl-input-group {
-      display: flex;
-      align-items: center;
-      gap: var(--space-xs);
-    }
-
-    .ttl-input-group input {
-      width: 80px;
-      padding: 8px 10px;
-      background: var(--bg-primary);
-      border: 1px solid var(--border-color);
-      border-radius: var(--radius-sm);
-      color: var(--text-primary);
-    }
-
-    .ttl-input-group select {
-      padding: 8px 10px;
-      background: var(--bg-primary);
-      border: 1px solid var(--border-color);
-      border-radius: var(--radius-sm);
-      color: var(--text-primary);
-    }
-
-    /* 캐시 설명 박스 */
-    .cache-info {
-      margin-top: var(--space-md);
-      padding: var(--space-md);
-      background: var(--bg-primary);
-      border-radius: var(--radius-md);
-      font-size: 11px;
-      line-height: 1.7;
-      color: var(--text-secondary);
-    }
-
-    /* 캐시 버튼 그룹 */
-    .cache-buttons {
-      display: flex;
-      gap: var(--space-xs);
-      margin-top: var(--space-sm);
-    }
-
-    .cache-buttons .btn {
-      flex: 1;
-      font-size: 12px;
-      padding: 10px;
-    }
-
-    /* 저장 바 (하단 고정) */
-    .save-bar {
-      position: sticky;
-      bottom: 0;
-      left: 0;
-      right: 0;
-      background: var(--bg-tabbar);
-      border-top: 1px solid var(--border-color);
-      padding: var(--space-sm) var(--space-lg);
-      display: none;
-      align-items: center;
-      gap: var(--space-sm);
-      margin: 0 calc(-1 * var(--space-lg)) calc(-1 * var(--space-lg));
-    }
-
-    .save-bar.active {
-      display: flex;
-    }
-
-    .save-bar .btn {
-      margin: 0;
-      flex: 1;
-    }
-
-    .save-bar .btn-cancel {
-      background: var(--bg-secondary);
-      color: var(--text-secondary);
-      border: 1px solid var(--border-color);
-      flex: 0 0 80px;
-    }
-
-    /* 토스트 (2초) */
-    .toast {
-      position: fixed;
-      top: var(--space-lg);
-      left: 50%;
-      transform: translateX(-50%);
-      background: var(--status-success);
-      color: white;
-      padding: var(--space-sm) var(--space-lg);
-      border-radius: var(--radius-md);
-      font-size: 13px;
-      font-weight: 600;
-      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
-      opacity: 0;
-      pointer-events: none;
-      transition: opacity 0.3s;
-      z-index: 1000;
-    }
-
-    .toast.show {
-      opacity: 1;
-    }
-
-    .toast.error {
-      background: var(--status-error);
-    }
-
-    /* ===== 검색 탭 스타일 ===== */
-    .search-card {
-      background: var(--bg-card);
-      border: 1px solid var(--border-color);
-      border-radius: var(--radius-lg);
-      padding: var(--space-lg);
-      box-shadow: var(--shadow);
-    }
-
-    .search-header {
-      margin-bottom: var(--space-xl);
-    }
-
-    .search-title {
-      font-size: 16px;
-      font-weight: 700;
-      color: var(--text-primary);
-      margin-bottom: 6px;
-      margin-top: 0;
-    }
-
-    .search-subtitle {
-      font-size: 13px;
-      color: var(--text-secondary);
-      line-height: 1.5;
-      margin: 0;
-    }
-
-    /* 검색 입력 영역 */
-    .search-input-group {
-      margin-bottom: var(--space-xl);
-    }
-
-    .search-input-group label {
-      display: block;
-      margin-bottom: var(--space-xs);
-      font-weight: 500;
-      font-size: 13px;
-      color: var(--text-primary);
-    }
-
-    .search-input-group textarea {
-      width: 100%;
-      padding: var(--space-sm) var(--space-md);
-      background: var(--bg-primary);
-      border: 1px solid var(--border-color);
-      border-radius: var(--radius-md);
-      color: var(--text-primary);
-      font-size: 13px;
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-      resize: vertical;
-      transition: all 0.2s;
-      margin-bottom: var(--space-sm);
-    }
-
-    .search-input-group textarea:focus {
-      outline: none;
-      border-color: var(--status-active);
-      box-shadow: 0 0 0 3px rgba(42, 108, 240, 0.1);
-    }
-
-    /* 로딩 상태 */
-    .search-loading {
-      display: flex;
-      align-items: center;
-      gap: var(--space-sm);
-      padding: var(--space-sm) var(--space-md);
-      background: var(--bg-primary);
-      border: 1px solid var(--border-color);
-      border-radius: var(--radius-md);
-      color: var(--text-secondary);
-      font-size: 13px;
-      margin-top: var(--space-sm);
-    }
-
-    .search-loading.show {
-      display: flex;
-    }
-
-    .spinner {
-      width: 16px;
-      height: 16px;
-      border: 2px solid rgba(42, 108, 240, 0.2);
-      border-top-color: var(--status-active);
-      border-radius: 50%;
-      animation: spin 0.8s linear infinite;
-    }
-
-    @keyframes spin {
-      to { transform: rotate(360deg); }
-    }
-
-    /* 추천 검색문 리스트 */
-    .search-recommendations {
-      display: flex;
-      flex-direction: column;
-      gap: var(--space-sm);
-    }
-
-    .search-item {
-      display: flex;
-      flex-direction: column;
-      gap: var(--space-sm);
-      padding: var(--space-md);
-      background: var(--bg-secondary);
-      border: 1px solid var(--border-color);
-      border-radius: var(--radius-md);
-      cursor: pointer;
-      transition: all 0.2s;
-    }
-
-    .search-item:hover {
-      background: rgba(42, 108, 240, 0.12);
-      border-color: rgba(42, 108, 240, 0.4);
-    }
-
-    .search-item:focus-visible {
-      outline: 2px solid rgba(42, 108, 240, 0.6);
-      outline-offset: 2px;
-    }
-
-    .search-item-text {
-      font-size: 13px;
-      color: var(--text-primary);
-      font-weight: 500;
-      line-height: 1.5;
-      word-break: break-word;
-    }
-
-    .search-item-engines {
-      display: flex;
-      align-items: center;
-      gap: var(--space-xs);
-      flex-wrap: wrap;
-    }
-
-    .search-engine-btn {
-      width: 36px;
-      height: 36px;
-      border-radius: 8px;
-      background: var(--bg-primary);
-      border: 1px solid var(--border-color);
-      cursor: pointer;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      transition: all 0.2s;
-      padding: 0;
-    }
-
-    .search-engine-btn img {
-      width: 20px;
-      height: 20px;
-      object-fit: contain;
-    }
-
-    .search-engine-btn svg {
-      width: 20px;
-      height: 20px;
-      filter: drop-shadow(0 0 2px rgba(255, 255, 255, 0.3));
-    }
-
-    .search-engine-btn:hover {
-      background: rgba(42, 108, 240, 0.15);
-      border-color: rgba(42, 108, 240, 0.6);
-      transform: scale(1.05);
-    }
-
-    .search-engine-btn:active {
-      transform: scale(0.95);
-    }
-
-    .search-engine-btn.all {
-      background: rgba(42, 108, 240, 0.15);
-      color: var(--status-active);
-      border-color: var(--status-active);
-      font-size: 12px;
-    }
-
-    .search-engine-btn.all:hover {
-      background: rgba(42, 108, 240, 0.25);
-    }
-
-    /* 빈 상태 */
-    .search-empty {
-      padding: var(--space-2xl) var(--space-lg);
-      border-radius: var(--radius-md);
-      border: 1px dashed rgba(255, 255, 255, 0.12);
-      background: rgba(18, 20, 24, 0.8);
-      text-align: center;
-      color: var(--text-secondary);
-      display: flex;
-      flex-direction: column;
-      gap: var(--space-sm);
-      align-items: center;
-      margin-top: var(--space-xl);
-    }
-
-    .search-empty.hidden {
-      display: none;
-    }
-
-    .search-empty-icon {
-      font-size: 36px;
-    }
-
-    .search-empty p {
-      font-size: 13px;
-      line-height: 1.6;
-      margin: 0;
-    }
-
-    /* ===== 텍스트 번역 탭 스타일 ===== */
-    .quick-translate-card {
-      background: var(--bg-card);
-      border: 1px solid var(--border-color);
-      border-radius: var(--radius-lg);
-      padding: var(--space-lg);
-      margin-bottom: var(--space-md);
-      box-shadow: var(--shadow);
-    }
-
-    .quick-translate-header {
-      margin-bottom: var(--space-lg);
-    }
-
-    .quick-translate-title {
-      font-size: 16px;
-      font-weight: 700;
-      color: var(--text-primary);
-      margin-bottom: 6px;
-      margin-top: 0;
-    }
-
-    .quick-translate-subtitle {
-      font-size: 13px;
-      color: var(--text-secondary);
-      line-height: 1.5;
-      margin: 0;
-    }
-
-    .quick-input-group {
-      margin-bottom: var(--space-md);
-    }
-
-    .quick-input-group label {
-      display: block;
-      margin-bottom: var(--space-xs);
-      font-weight: 500;
-      font-size: 13px;
-      color: var(--text-primary);
-    }
-
-    .quick-input-group textarea {
-      width: 100%;
-      min-height: 120px;
-      padding: var(--space-sm);
-      background: var(--bg-primary);
-      border: 1px solid var(--border-color);
-      border-radius: var(--radius-md);
-      color: var(--text-primary);
-      font-size: 13px;
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-      resize: vertical;
-      transition: all 0.2s;
-      line-height: 1.6;
-    }
-
-    .quick-input-group textarea:focus {
-      outline: none;
-      border-color: var(--status-active);
-      box-shadow: 0 0 0 3px rgba(42, 108, 240, 0.1);
-    }
-
-    .quick-input-help {
-      font-size: 11px;
-      color: var(--text-secondary);
-      margin-top: 6px;
-    }
-
-    .quick-loading {
-      display: flex;
-      align-items: center;
-      gap: var(--space-sm);
-      padding: var(--space-lg);
-      background: var(--bg-primary);
-      border: 1px solid var(--border-color);
-      border-radius: var(--radius-md);
-      color: var(--text-secondary);
-      font-size: 13px;
-      justify-content: center;
-    }
-
-    .quick-error {
-      padding: var(--space-lg);
-      background: rgba(239, 68, 68, 0.1);
-      border: 1px solid rgba(239, 68, 68, 0.3);
-      border-radius: var(--radius-md);
-      color: var(--status-error);
-      font-size: 13px;
-      text-align: center;
-    }
-
-    .quick-result-card {
-      background: var(--bg-primary);
-      border: 1px solid var(--border-color);
-      border-radius: var(--radius-md);
-      padding: var(--space-md);
-      margin-bottom: var(--space-lg);
-    }
-
-    .quick-result-header {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      margin-bottom: var(--space-sm);
-      padding-bottom: var(--space-sm);
-      border-bottom: 1px solid var(--border-color);
-    }
-
-    .quick-result-label {
-      font-size: 12px;
-      font-weight: 600;
-      color: var(--text-secondary);
-      text-transform: uppercase;
-      letter-spacing: 0.5px;
-    }
-
-    .quick-toggle-original {
-      font-size: 12px;
-      padding: 6px 12px;
-      background: var(--btn-secondary-bg);
-      color: var(--text-primary);
-      border: 1px solid var(--border-color);
-      border-radius: 6px;
-      cursor: pointer;
-      transition: all 0.2s;
-    }
-
-    .quick-toggle-original:hover {
-      background: var(--btn-secondary-hover);
-    }
-
-    .quick-result-text {
-      font-size: 14px;
-      color: var(--text-primary);
-      line-height: 1.8;
-      white-space: pre-wrap;
-      word-break: break-word;
-    }
-
-    /* 히스토리 섹션 */
-    .quick-history-header {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      margin-top: var(--space-2xl);
-      margin-bottom: var(--space-md);
-    }
-
-    .quick-history-title {
-      font-size: 15px;
-      font-weight: 600;
-      color: var(--text-primary);
-      margin: 0;
-    }
-
-    .quick-history-list {
-      display: flex;
-      flex-direction: column;
-      gap: var(--space-md);
-    }
-
-    .quick-history-item {
-      display: flex;
-      align-items: flex-start;
-      gap: var(--space-sm);
-      padding: var(--space-md);
-      background: var(--bg-secondary);
-      border: 1px solid var(--border-color);
-      border-radius: var(--radius-md);
-      transition: all 0.2s;
-    }
-
-    .quick-history-item:hover {
-      background: rgba(42, 108, 240, 0.08);
-      border-color: rgba(42, 108, 240, 0.3);
-    }
-
-    .quick-history-body {
-      flex: 1;
-      display: flex;
-      flex-direction: column;
-      gap: var(--space-xs);
-      overflow: hidden;
-    }
-
-    .quick-history-translation {
-      font-size: 14px;
-      color: var(--text-primary);
-      line-height: 1.6;
-      word-break: break-word;
-      white-space: pre-wrap;
-    }
-
-    .quick-history-original {
-      font-size: 13px;
-      color: var(--text-secondary);
-      line-height: 1.6;
-      word-break: break-word;
-      padding: var(--space-sm);
-      background: var(--bg-primary);
-      border-radius: 6px;
-      border: 1px solid var(--border-color);
-      white-space: pre-wrap;
-    }
-
-    .quick-history-original.collapsed {
-      display: none;
-    }
-
-    .quick-history-meta {
-      display: flex;
-      align-items: center;
-      gap: var(--space-sm);
-      font-size: 11px;
-      color: var(--text-secondary);
-    }
-
-    .quick-history-toggle {
-      font-size: 11px;
-      padding: 4px 8px;
-      background: transparent;
-      color: var(--status-active);
-      border: 1px solid var(--status-active);
-      border-radius: 4px;
-      cursor: pointer;
-      transition: all 0.2s;
-    }
-
-    .quick-history-toggle:hover {
-      background: rgba(42, 108, 240, 0.15);
-    }
-
-    .quick-history-delete {
-      width: 32px;
-      height: 32px;
-      border-radius: 9999px;
-      background: rgba(255, 255, 255, 0.04);
-      border: 1px solid var(--border-color);
-      color: var(--text-secondary);
-      cursor: pointer;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      transition: all 0.2s;
-      flex-shrink: 0;
-      padding: 0;
-    }
-
-    .quick-history-delete:hover {
-      background: rgba(239, 68, 68, 0.2);
-      border-color: rgba(239, 68, 68, 0.4);
-      color: #fca5a5;
-    }
-
-    .quick-history-empty {
-      padding: var(--space-2xl) var(--space-lg);
-      border-radius: var(--radius-md);
-      border: 1px dashed rgba(255, 255, 255, 0.12);
-      background: rgba(18, 20, 24, 0.8);
-      text-align: center;
-      color: var(--text-secondary);
-      display: none;
-      flex-direction: column;
-      gap: var(--space-sm);
-      align-items: center;
-    }
-
-    .quick-history-empty-icon {
-      font-size: 36px;
-    }
-
-    .quick-history-empty p {
-      font-size: 13px;
-      line-height: 1.6;
-      margin: 0;
-    }
-
-    /* ===== 반복관리 탭 스타일 ===== */
-    .recurring-card {
-      background: var(--bg-card);
-      border: 1px solid var(--border-color);
-      border-radius: var(--radius-lg);
-      padding: var(--space-lg);
-      box-shadow: var(--shadow);
-      display: flex;
-      flex-direction: column;
-      gap: var(--space-lg);
-    }
-
-    .recurring-header {
-      margin-bottom: var(--space-sm);
-    }
-
-    .recurring-title {
-      font-size: 16px;
-      font-weight: 700;
-      color: var(--text-primary);
-      margin-bottom: 6px;
-      margin-top: 0;
-    }
-
-    .recurring-subtitle {
-      font-size: 13px;
-      color: var(--text-secondary);
-      line-height: 1.5;
-      margin: 0;
-    }
-
-    /* 카테고리 섹션 */
-    .recurring-category-section label {
-      display: block;
-      margin-bottom: var(--space-xs);
-      font-weight: 500;
-      font-size: 13px;
-      color: var(--text-primary);
-    }
-
-    .recurring-category-controls {
-      display: flex;
-      gap: var(--space-xs);
-      align-items: center;
-      flex-wrap: wrap;
-    }
-
-    .recurring-category-select {
-      flex: 1;
-      padding: 10px 14px;
-      background: var(--bg-primary);
-      border: 1px solid var(--border-color);
-      border-radius: var(--radius-md);
-      color: var(--text-primary);
-      font-size: 13px;
-      transition: all 0.2s;
-      cursor: pointer;
-    }
-
-    .recurring-category-select:focus {
-      outline: none;
-      border-color: var(--status-active);
-      box-shadow: 0 0 0 3px rgba(42, 108, 240, 0.1);
-    }
-
-    /* 액션 버튼 */
-    .recurring-actions {
-      display: grid;
-      grid-template-columns: repeat(2, 1fr);
-      gap: var(--space-xs);
-    }
-
-    .recurring-actions .btn {
-      margin: 0;
-      font-size: 12px;
-      padding: 10px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-    }
-
-    /* 할일 목록 */
-    .recurring-task-list-container {
-      min-height: 200px;
-      max-height: 400px;
-      overflow-y: auto;
-      scrollbar-width: thin;
-      scrollbar-color: #2A2F38 #0F1115;
-    }
-
-    .recurring-task-list-container::-webkit-scrollbar {
-      width: 8px;
-    }
-
-    .recurring-task-list-container::-webkit-scrollbar-track {
-      background: #0F1115;
-      border-radius: 4px;
-    }
-
-    .recurring-task-list-container::-webkit-scrollbar-thumb {
-      background: #2A2F38;
-      border-radius: 4px;
-    }
-
-    .recurring-task-list {
-      display: flex;
-      flex-direction: column;
-      gap: 0;
-    }
-
-    .recurring-task-item {
-      display: grid;
-      grid-template-columns: auto 20px 1fr auto;
-      align-items: center;
-      gap: var(--space-sm);
-      padding: var(--space-sm) var(--space-md);
-      background: var(--bg-secondary);
-      border-bottom: 1px solid var(--border-color);
-      transition: all 0.2s;
-      cursor: move;
-      counter-increment: task-counter;
-    }
-
-    .recurring-task-item:first-child {
-      border-top: 1px solid var(--border-color);
-    }
-
-    .recurring-task-item:hover {
-      background: rgba(42, 108, 240, 0.08);
-    }
-
-    .recurring-task-item.dragging {
-      opacity: 0.5;
-    }
-
-    .recurring-task-item.drag-over {
-      border-color: var(--status-active);
-      background: rgba(42, 108, 240, 0.15);
-    }
-
-    .recurring-task-list-container {
-      counter-reset: task-counter;
-    }
-
-    .task-order {
-      font-size: 13px;
-      font-weight: 600;
-      color: var(--text-secondary);
-      width: 24px;
-      text-align: right;
-      flex-shrink: 0;
-    }
-
-    .task-order::after {
-      content: counter(task-counter) ".";
-    }
-
-    .task-checkbox {
-      width: 20px;
-      height: 20px;
-      cursor: pointer;
-      flex-shrink: 0;
-      accent-color: var(--status-active);
-    }
-
-    .task-text {
-      flex: 1;
-      font-size: 14px;
-      color: var(--text-primary);
-      cursor: pointer;
-      word-break: break-word;
-      line-height: 1.5;
-      padding: 4px 0;
-    }
-
-    .task-text:hover {
-      color: var(--status-active);
-    }
-
-    /* 빈 상태 */
-    .recurring-empty {
-      padding: var(--space-2xl) var(--space-lg);
-      border-radius: var(--radius-md);
-      border: 1px dashed rgba(255, 255, 255, 0.12);
-      background: rgba(18, 20, 24, 0.8);
-      text-align: center;
-      color: var(--text-secondary);
-      display: none;
-      flex-direction: column;
-      gap: var(--space-sm);
-      align-items: center;
-    }
-
-    .recurring-empty-icon {
-      font-size: 36px;
-    }
-
-    .recurring-empty p {
-      font-size: 13px;
-      line-height: 1.6;
-      margin: 0;
-    }
-
-    /* 할일 추가 */
-    .recurring-add-task {
-      display: flex;
-      gap: var(--space-xs);
-      align-items: center;
-    }
-
-    .recurring-add-task input {
-      flex: 1;
-      padding: 10px 14px;
-      background: var(--bg-primary);
-      border: 1px solid var(--border-color);
-      border-radius: var(--radius-md);
-      color: var(--text-primary);
-      font-size: 13px;
-      transition: all 0.2s;
-    }
-
-    .recurring-add-task input:focus {
-      outline: none;
-      border-color: var(--status-active);
-      box-shadow: 0 0 0 3px rgba(42, 108, 240, 0.1);
-    }
-
-    /* 카테고리 인라인 폼 */
-    .recurring-inline-form {
-      display: flex;
-      gap: var(--space-xs);
-      align-items: center;
-      margin-top: var(--space-xs);
-      padding: var(--space-sm);
-      background: var(--bg-primary);
-      border: 1px solid var(--status-active);
-      border-radius: var(--radius-md);
-      animation: slideDown 0.2s ease-out;
-    }
-
-    @keyframes slideDown {
-      from {
-        opacity: 0;
-        transform: translateY(-8px);
-      }
-      to {
-        opacity: 1;
-        transform: translateY(0);
-      }
-    }
-
-    .recurring-inline-form input {
-      flex: 1;
-      padding: 10px 14px;
-      background: var(--bg-secondary);
-      border: 1px solid var(--border-color);
-      border-radius: var(--radius-md);
-      color: var(--text-primary);
-      font-size: 13px;
-      transition: all 0.2s;
-    }
-
-    .recurring-inline-form input:focus {
-      outline: none;
-      border-color: var(--status-active);
-      box-shadow: 0 0 0 3px rgba(42, 108, 240, 0.1);
-    }
-
-    .recurring-inline-form .icon-btn {
-      background: rgba(42, 108, 240, 0.15);
-      border-color: var(--status-active);
-      color: var(--status-active);
-    }
-
-    .recurring-inline-form .icon-btn:hover {
-      background: rgba(42, 108, 240, 0.25);
-      border-color: var(--status-active);
-      color: var(--text-primary);
-    }
-
-    .recurring-inline-form .icon-btn:last-child {
-      background: rgba(239, 68, 68, 0.15);
-      border-color: var(--status-error);
-      color: var(--status-error);
-    }
-
-    .recurring-inline-form .icon-btn:last-child:hover {
-      background: rgba(239, 68, 68, 0.25);
-      border-color: var(--status-error);
-      color: #fca5a5;
-    }
-  </style>
+  <link rel="stylesheet" href="styles/sidepanel.css">
 </head>
 <body>
   <!-- 패널 컨테이너 -->
@@ -2336,7 +13,7 @@
     <div class="content-area">
       <!-- 헤더 (고정) -->
       <header class="panel-header">
-        <h1 id="panelTitle">웹 도우미</h1>
+        <h1 id="panelTitle">번역</h1>
       </header>
 
       <!-- 메인 컨텐츠 (스크롤) -->
@@ -2344,8 +21,9 @@
         <!-- 번역 탭 -->
         <div id="translateTab" class="tab-content active">
           <div class="translate-subtabs" role="tablist" aria-label="번역 보기 전환">
-            <button id="translatePageSubtab" class="translate-subtab" type="button" role="tab" aria-selected="true" data-translate-panel="page">현재 페이지</button>
-            <button id="translateHistorySubtab" class="translate-subtab" type="button" role="tab" aria-selected="false" data-translate-panel="history">번역 기록</button>
+            <button id="translatePageSubtab" class="translate-subtab" type="button" role="tab" aria-selected="true" data-translate-panel="page">사이트</button>
+            <button id="translateTextSubtab" class="translate-subtab" type="button" role="tab" aria-selected="false" data-translate-panel="text">텍스트</button>
+            <button id="translateHistorySubtab" class="translate-subtab" type="button" role="tab" aria-selected="false" data-translate-panel="history">기록</button>
           </div>
 
           <div id="translatePagePanel" class="translate-panel active">
@@ -2377,7 +55,7 @@
               <!-- 번역 기능 (API Key 있을 때만 표시) -->
               <div id="translateSection">
                 <div class="translation-shell">
-                  <div class="main-card translation-engine-card">
+                  <div class="main-card card translation-engine-card">
                     <div class="translation-engine-header">
                       <div>
                         <div class="translation-engine-title-row">
@@ -2421,7 +99,7 @@
                     </div>
                   </div>
 
-                  <div class="main-card translation-status-card">
+                  <div class="main-card card translation-status-card">
                     <div class="status-header">
                       <span class="status-label">번역 진행 상태</span>
                       <div style="display: flex; align-items: center; gap: 8px;">
@@ -2479,6 +157,37 @@
             </div>
           </div>
 
+          <div id="translateTextPanel" class="translate-panel">
+            <div class="quick-translate-card">
+              <div class="quick-translate-header">
+                <h2 class="quick-translate-title">텍스트 번역</h2>
+                <p class="quick-translate-subtitle">텍스트를 붙여넣고 즉시 번역하세요</p>
+              </div>
+
+              <div class="quick-input-group">
+                <label for="quickTextInput">번역할 텍스트</label>
+                <textarea id="quickTextInput" placeholder="번역할 텍스트를 입력하거나 붙여넣으세요..." rows="6"></textarea>
+                <div class="quick-input-help">Ctrl+Enter로 빠르게 번역할 수 있습니다</div>
+              </div>
+
+              <button id="quickTranslateBtn" class="btn">번역</button>
+
+              <div id="quickTranslationResult" style="display: none;"></div>
+
+              <div class="quick-history-header">
+                <h3 class="quick-history-title">번역 기록</h3>
+                <button id="quickClearHistoryBtn" class="history-clear-btn" type="button">전체 삭제</button>
+              </div>
+
+              <div id="quickHistoryEmpty" class="quick-history-empty" style="display: flex;">
+                <div class="quick-history-empty-icon">📝</div>
+                <p>아직 번역한 기록이 없습니다.<br>텍스트를 입력하고 번역 버튼을 눌러보세요!</p>
+              </div>
+
+              <div id="quickHistoryList" class="quick-history-list" style="display: none;"></div>
+            </div>
+          </div>
+
           <div id="translateHistoryPanel" class="translate-panel">
             <div class="history-card">
               <div class="history-header">
@@ -2500,865 +209,158 @@
           </div>
         </div>
 
-        <!-- 텍스트 번역 탭 -->
-        <div id="quickTranslateTab" class="tab-content">
-          <div class="quick-translate-card">
-            <div class="quick-translate-header">
-              <h2 class="quick-translate-title">✍️ 텍스트 번역</h2>
-              <p class="quick-translate-subtitle">텍스트를 붙여넣고 즉시 번역하세요</p>
-            </div>
-
-            <!-- 입력 영역 -->
-            <div class="quick-input-group">
-              <label for="quickTextInput">번역할 텍스트</label>
-              <textarea id="quickTextInput" placeholder="번역할 텍스트를 입력하거나 붙여넣으세요..." rows="6"></textarea>
-              <div class="quick-input-help">Ctrl+Enter로 빠르게 번역할 수 있습니다</div>
-            </div>
-
-            <button id="quickTranslateBtn" class="btn">번역</button>
-
-            <!-- 번역 결과 영역 -->
-            <div id="quickTranslationResult" style="display: none;"></div>
-
-            <!-- 히스토리 섹션 -->
-            <div class="quick-history-header">
-              <h3 class="quick-history-title">번역 기록</h3>
-              <button id="quickClearHistoryBtn" class="history-clear-btn" type="button">전체 삭제</button>
-            </div>
-
-            <!-- 빈 상태 -->
-            <div id="quickHistoryEmpty" class="quick-history-empty" style="display: flex;">
-              <div class="quick-history-empty-icon">📝</div>
-              <p>아직 번역한 기록이 없습니다.<br>텍스트를 입력하고 번역 버튼을 눌러보세요!</p>
-            </div>
-
-            <!-- 히스토리 리스트 -->
-            <div id="quickHistoryList" class="quick-history-list" style="display: none;"></div>
-          </div>
-        </div>
-
-        <!-- SEO 검사 탭 -->
-        <div id="geoTab" class="tab-content">
-          <div class="main-card">
-            <div class="status-header">
-              <span class="status-label">🔍 SEO 검사</span>
-            </div>
-            <p style="color: var(--text-secondary); font-size: 13px; margin-bottom: 16px;">
-              검색 노출과 AI 노출 요소를 함께 점검합니다.
-            </p>
-            <button id="geoRunAuditBtn" class="btn">검사 시작</button>
-          </div>
+        <!-- 페이지 진단 탭 -->
+        <div id="geoTab" class="tab-content geo-tab-shell">
+          <div class="settings-title">페이지 진단</div>
+          <p class="geo-panel-description">검색/AI 노출에 도움이 되는 기본 요소를 진단합니다.</p>
+          <button id="geoRunAuditBtn" class="btn geo-run-btn">진단 시작</button>
 
           <!-- 로딩 스피너 -->
           <div id="geoLoadingSpinner" style="display: none; justify-content: center; align-items: center; flex-direction: column; gap: 16px; padding: 40px 20px;">
             <div style="width: 40px; height: 40px; border: 4px solid rgba(42, 108, 240, 0.2); border-top-color: #2A6CF0; border-radius: 50%; animation: spin 1s linear infinite;"></div>
-            <span style="color: var(--text-secondary); font-size: 13px;">검사 중입니다...</span>
+            <span style="color: var(--text-secondary); font-size: 13px;">진단 중입니다...</span>
           </div>
 
           <!-- 에러 메시지 -->
           <div id="geoErrorMessage" style="display: none; margin-bottom: 16px; padding: 12px 16px; background: rgba(239, 68, 68, 0.1); border: 1px solid rgba(239, 68, 68, 0.3); border-radius: var(--radius-md); color: #fca5a5; font-size: 13px;"></div>
 
           <!-- 검사 결과 -->
-          <div id="geoResultSection" style="display: none;">
+          <div id="geoResultSection" class="geo-result-stack" style="display: none;">
             <!-- 점수 카드 -->
-            <div id="geoScoreCard" class="main-card">
-              <div class="status-header">
-                <span class="status-label">점수</span>
-              </div>
-              <div id="geoScores"></div>
-            </div>
+            <div id="geoScoreCard" class="geo-panel-card card"></div>
 
             <!-- 체크리스트 -->
-            <div id="geoChecklistContainer" style="display: flex; flex-direction: column; gap: 16px;"></div>
+            <div id="geoChecklistContainer" class="geo-result-list"></div>
 
             <!-- LLM 의견 -->
-            <div id="geoImprovementSection"></div>
+            <div id="geoImprovementSection" class="geo-result-list"></div>
+          </div>
+        </div>
+
+        <!-- 도구 탭 -->
+        <div id="toolsTab" class="tab-content tools-tab-shell">
+          <div class="translate-subtabs tools-subtabs" role="tablist" aria-label="도구 기능 전환">
+            <button type="button" class="translate-subtab" data-tools-panel="cleanup" role="tab" aria-selected="true">브라우저 정리</button>
+            <button type="button" class="translate-subtab" data-tools-panel="visits" role="tab" aria-selected="false">방문 TOP 100</button>
           </div>
 
-          <style>
-            .geo-scores {
-              display: grid;
-              grid-template-columns: repeat(4, 1fr);
-              gap: 12px;
-              margin-bottom: 16px;
-            }
-
-            .geo-score-item {
-              background: var(--bg-secondary);
-              border: 1px solid var(--border-color);
-              border-radius: var(--radius-md);
-              padding: 12px;
-              text-align: center;
-              /* 모든 카드 같은 높이 */
-              display: flex;
-              flex-direction: column;
-              justify-content: center;
-              align-items: center;
-              min-height: 80px;
-            }
-
-            .geo-score-item.total {
-              /* 총점도 4개 중 1개로 같은 크기 */
-              grid-column: auto;
-              background: rgba(42, 108, 240, 0.1);
-              border-color: rgba(42, 108, 240, 0.3);
-            }
-
-            .geo-score-item.seo { border-color: rgba(16, 185, 129, 0.3); }
-            .geo-score-item.aeo { border-color: rgba(245, 158, 11, 0.3); }
-            .geo-score-item.geo { border-color: rgba(42, 108, 240, 0.3); }
-
-            .score-value {
-              font-size: 20px;
-              font-weight: 700;
-              color: var(--text-primary);
-              margin-bottom: 4px;
-            }
-
-            .geo-score-item.seo .score-value { color: #10b981; }
-            .geo-score-item.aeo .score-value { color: #f59e0b; }
-            .geo-score-item.geo .score-value { color: #2A6CF0; }
-            .geo-score-item.total .score-value { color: var(--status-active); }
-
-            .score-label {
-              font-size: 12px;
-              color: var(--text-secondary);
-            }
-
-            .geo-score-summary {
-              display: flex;
-              gap: 16px;
-              font-size: 13px;
-              color: var(--text-secondary);
-            }
-
-            .geo-category {
-              margin-bottom: 16px;
-            }
-
-            .geo-category-title {
-              font-size: 14px;
-              font-weight: 600;
-              color: var(--text-primary);
-              margin-bottom: 12px;
-              padding: 8px 0;
-              border-bottom: 1px solid var(--border-color);
-            }
-
-            .geo-items {
-              display: flex;
-              flex-direction: column;
-              gap: 8px;
-            }
-
-            .geo-item {
-              padding: 12px;
-              background: var(--bg-secondary);
-              border: 1px solid var(--border-color);
-              border-radius: var(--radius-md);
-              font-size: 13px;
-            }
-
-            .geo-item.passed {
-              background: rgba(16, 185, 129, 0.05);
-              border-color: rgba(16, 185, 129, 0.2);
-            }
-
-            .geo-item.failed {
-              background: rgba(239, 68, 68, 0.05);
-              border-color: rgba(239, 68, 68, 0.2);
-            }
-
-            .geo-item-header {
-              display: flex;
-              align-items: center;
-              gap: 8px;
-              margin-bottom: 4px;
-            }
-
-            .geo-item-icon {
-              font-size: 14px;
-            }
-
-            .geo-item-title {
-              flex: 1;
-              color: var(--text-primary);
-              font-weight: 500;
-            }
-
-            .geo-item-weight {
-              font-size: 11px;
-              color: var(--text-secondary);
-              background: rgba(255, 255, 255, 0.05);
-              padding: 2px 6px;
-              border-radius: 4px;
-            }
-
-            .geo-item-description {
-              font-size: 12px;
-              color: var(--text-secondary);
-              margin-top: 8px;
-              padding: 8px;
-              background: rgba(255, 255, 255, 0.02);
-              border-left: 3px solid rgba(42, 108, 240, 0.3);
-              border-radius: 4px;
-              line-height: 1.5;
-            }
-
-            .geo-item-description > div {
-              margin-bottom: 4px;
-            }
-
-            .geo-item-description > div:last-child {
-              margin-bottom: 0;
-            }
-
-            .geo-item-bullet {
-              margin-left: 12px;
-              color: var(--text-secondary);
-            }
-
-            .geo-item-bullet::before {
-              content: "• ";
-              color: var(--status-active);
-              font-weight: bold;
-              margin-right: 4px;
-            }
-
-            .geo-item-action {
-              color: var(--status-warning);
-              font-weight: 500;
-              margin-top: 4px;
-            }
-
-            .geo-item-action::before {
-              content: "→ ";
-              margin-right: 4px;
-            }
-
-            .geo-item-hint {
-              font-size: 12px;
-              color: var(--text-secondary);
-              margin-top: 8px;
-              padding: 8px;
-              background: rgba(239, 68, 68, 0.05);
-              border-left: 3px solid var(--status-error);
-              border-radius: 4px;
-              line-height: 1.5;
-            }
-
-            .geo-improvement {
-              background: var(--bg-card);
-              border: 1px solid var(--border-color);
-              border-radius: var(--radius-lg);
-              padding: var(--space-lg);
-              margin-bottom: var(--space-md);
-            }
-
-            .geo-improvement h3 {
-              font-size: 14px;
-              font-weight: 600;
-              color: var(--text-primary);
-              margin-bottom: 12px;
-            }
-
-            .geo-improvement-content {
-              font-size: 13px;
-              color: var(--text-secondary);
-              line-height: 1.6;
-            }
-
-            .geo-improvement-content p {
-              margin-bottom: 8px;
-            }
-
-            .geo-improvement-content strong {
-              color: var(--text-primary);
-              font-weight: 600;
-            }
-
-            .geo-improvement-content em {
-              color: var(--text-secondary);
-              font-style: italic;
-            }
-
-            /* h2: 메인 섹션 제목 */
-            .geo-improvement-h2 {
-              font-size: 16px;
-              font-weight: 800;
-              color: var(--text-primary);
-              margin-top: 20px;
-              margin-bottom: 16px;
-              padding-bottom: 12px;
-              border-bottom: 3px solid var(--status-active);
-              letter-spacing: 0.5px;
-            }
-
-            .geo-improvement-h2:first-child {
-              margin-top: 0;
-            }
-
-            /* h3: 항목 제목 (1. 2. 3.) */
-            .geo-improvement-h3 {
-              font-size: 15px;
-              font-weight: 700;
-              color: var(--text-primary);
-              margin-top: 16px;
-              margin-bottom: 12px;
-              padding-left: 12px;
-              border-left: 4px solid var(--status-active);
-              background: rgba(42, 108, 240, 0.05);
-              padding-top: 8px;
-              padding-bottom: 8px;
-              padding-right: 8px;
-              border-radius: 0 4px 4px 0;
-            }
-
-            /* h4: 추가 소제목 */
-            .geo-improvement-h4 {
-              font-size: 13px;
-              font-weight: 700;
-              color: var(--status-active);
-              margin-top: 12px;
-              margin-bottom: 8px;
-              padding-left: 8px;
-              border-left: 2px solid rgba(42, 108, 240, 0.5);
-            }
-
-            /* 소제목 강화 (구체적인 실행 방법:, 예상 효과: 등) */
-            .geo-section-title {
-              display: block;
-              font-size: 13px;
-              font-weight: 700;
-              color: var(--status-active);
-              margin-top: 12px;
-              margin-bottom: 8px;
-              padding-bottom: 6px;
-              border-bottom: 2px solid rgba(42, 108, 240, 0.3);
-            }
-
-            .geo-improvement-content > p:has(+ .geo-ordered-list),
-            .geo-improvement-content > p:has(+ .geo-unordered-list) {
-              margin-bottom: 4px;
-            }
-
-            /* 번호 목록 스타일링 */
-            .geo-ordered-list {
-              list-style: decimal;
-              list-style-position: inside;
-              margin: 8px 0 12px 0;
-              padding-left: 12px;
-            }
-
-            .geo-ordered-list li {
-              margin-bottom: 8px;
-              color: var(--text-secondary);
-              line-height: 1.6;
-              padding-left: 4px;
-            }
-
-            .geo-ordered-list li:last-child {
-              margin-bottom: 0;
-            }
-
-            .geo-ordered-list li::marker {
-              color: var(--status-active);
-              font-weight: 700;
-            }
-
-            /* 불릿 목록 스타일링 */
-            .geo-unordered-list {
-              list-style: none;
-              margin: 8px 0 12px 0;
-              padding-left: 16px;
-            }
-
-            .geo-unordered-list li {
-              margin-bottom: 8px;
-              color: var(--text-secondary);
-              line-height: 1.6;
-              position: relative;
-              padding-left: 8px;
-            }
-
-            .geo-unordered-list li:last-child {
-              margin-bottom: 0;
-            }
-
-            .geo-unordered-list li::before {
-              content: "→";
-              position: absolute;
-              left: -12px;
-              color: var(--status-warning);
-              font-weight: bold;
-            }
-
-            /* 인라인 코드 스타일 */
-            .geo-inline-code {
-              background: rgba(42, 108, 240, 0.15);
-              color: var(--status-active);
-              font-family: 'Consolas', 'Monaco', monospace;
-              font-size: 12px;
-              padding: 2px 6px;
-              border-radius: 4px;
-              font-weight: 500;
-            }
-
-            /* 코드블록 강화 */
-            .geo-improvement-content pre {
-              background: var(--bg-primary);
-              border: 1px solid var(--border-color);
-              border-left: 3px solid var(--status-active);
-              border-radius: var(--radius-md);
-              padding: 12px;
-              overflow-x: auto;
-              margin: 12px 0;
-            }
-
-            .geo-improvement-content code {
-              font-family: 'Consolas', 'Monaco', monospace;
-              font-size: 12px;
-              color: var(--text-secondary);
-              line-height: 1.5;
-              white-space: pre-wrap;
-              word-break: break-word;
-            }
-
-            /* GEO 개선 의견 (마크다운 기반) */
-            .geo-improvement-content {
-              font-size: 13px;
-              color: var(--text-secondary);
-              line-height: 1.7;
-            }
-
-            .geo-improvement-content h3 {
-              font-size: 15px;
-              font-weight: 700;
-              color: var(--status-active);
-              margin: 16px 0 12px 0;
-              padding-left: 12px;
-              border-left: 3px solid var(--status-active);
-            }
-
-            .geo-improvement-content h3:first-child {
-              margin-top: 0;
-            }
-
-            .geo-improvement-content p {
-              margin: 8px 0;
-              color: var(--text-secondary);
-            }
-
-            .geo-improvement-content strong {
-              color: var(--text-primary);
-              font-weight: 600;
-            }
-
-            .geo-improvement-content em {
-              color: var(--text-secondary);
-              font-style: italic;
-            }
-
-            .geo-improvement-list {
-              list-style: none;
-              padding-left: 16px;
-              margin: 8px 0 12px 0;
-            }
-
-            .geo-improvement-list li {
-              margin-bottom: 8px;
-              color: var(--text-secondary);
-              position: relative;
-              padding-left: 8px;
-            }
-
-            .geo-improvement-list li:before {
-              content: "→";
-              position: absolute;
-              left: -12px;
-              color: var(--status-warning);
-              font-weight: bold;
-            }
-
-            .geo-improvement-list li:last-child {
-              margin-bottom: 0;
-            }
-
-            /* === Dual Audit 스타일 (봇 vs 브라우저) === */
-
-            /* 차이점 경고 */
-            .geo-diff-warning {
-              background: rgba(239, 68, 68, 0.1);
-              border: 1px solid rgba(239, 68, 68, 0.3);
-              border-left: 4px solid var(--status-error);
-              padding: 12px 16px;
-              border-radius: var(--radius-md);
-              color: var(--text-primary);
-              font-size: 13px;
-              margin-bottom: 16px;
-            }
-
-            .geo-diff-success {
-              background: rgba(16, 185, 129, 0.1);
-              border: 1px solid rgba(16, 185, 129, 0.3);
-              border-left: 4px solid var(--status-success);
-              padding: 12px 16px;
-              border-radius: var(--radius-md);
-              color: var(--text-primary);
-              font-size: 13px;
-              margin-bottom: 16px;
-            }
-
-            /* 점수 비교 섹션 */
-            .geo-score-comparison {
-              background: var(--bg-secondary);
-              border: 1px solid var(--border-color);
-              border-radius: var(--radius-lg);
-              padding: 16px;
-              margin-bottom: 24px;
-            }
-
-            .geo-score-comparison h3 {
-              font-size: 14px;
-              font-weight: 600;
-              color: var(--text-primary);
-              margin-bottom: 16px;
-            }
-
-            .geo-score-row {
-              display: grid;
-              grid-template-columns: 1fr 1fr;
-              gap: 16px;
-              margin-bottom: 12px;
-            }
-
-            .geo-score-col {
-              background: var(--bg-primary);
-              border: 1px solid var(--border-color);
-              border-radius: var(--radius-md);
-              padding: 16px;
-              text-align: center;
-            }
-
-            .geo-score-label {
-              font-size: 13px;
-              color: var(--text-secondary);
-              margin-bottom: 8px;
-            }
-
-            .geo-score-value {
-              font-size: 28px;
-              font-weight: 700;
-              color: var(--status-active);
-              margin-bottom: 8px;
-            }
-
-            .geo-score-value.low {
-              color: var(--status-error);
-            }
-
-            .geo-score-detail {
-              font-size: 12px;
-              color: var(--text-secondary);
-            }
-
-            .geo-score-gap {
-              background: rgba(239, 68, 68, 0.05);
-              border: 1px solid rgba(239, 68, 68, 0.2);
-              border-radius: var(--radius-md);
-              padding: 12px;
-              display: flex;
-              align-items: center;
-              gap: 8px;
-              font-size: 13px;
-            }
-
-            .geo-gap-icon {
-              font-size: 16px;
-            }
-
-            .geo-gap-text {
-              color: var(--status-error);
-              font-weight: 600;
-            }
-
-            .geo-gap-hint {
-              color: var(--text-secondary);
-              flex: 1;
-            }
-
-            /* 봇/브라우저 섹션 */
-            .geo-audit-section {
-              margin-bottom: 32px;
-            }
-
-            .geo-audit-section h3 {
-              font-size: 15px;
-              font-weight: 700;
-              color: var(--text-primary);
-              margin-bottom: 16px;
-              padding-bottom: 12px;
-              border-bottom: 2px solid var(--border-color);
-            }
-
-            .geo-audit-section.bot-section h3 {
-              border-bottom-color: rgba(245, 158, 11, 0.4);
-            }
-
-            .geo-audit-section.client-section h3 {
-              border-bottom-color: rgba(16, 185, 129, 0.4);
-            }
-
-            .geo-audit-section h4.geo-category-title {
-              font-size: 13px;
-              padding-bottom: 8px;
-              margin-top: 16px;
-            }
-
-            /* 차이점 강조 */
-            .geo-item-diff {
-              border: 2px solid var(--status-error) !important;
-              box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.1);
-            }
-
-            .geo-diff-badge {
-              background: var(--status-error);
-              color: white;
-              font-size: 11px;
-              font-weight: 600;
-              padding: 2px 8px;
-              border-radius: 12px;
-              margin-left: auto;
-              margin-right: 4px;
-            }
-
-            /* Dual Audit - 항목별 나란히 비교 */
-            .geo-dual-comparison {
-              margin-top: 24px;
-            }
-
-            .geo-dual-item {
-              background: var(--bg-secondary);
-              border: 1px solid var(--border-color);
-              border-radius: var(--radius-md);
-              padding: 16px;
-              margin-bottom: 12px;
-            }
-
-            .geo-dual-header {
-              display: flex;
-              align-items: center;
-              gap: 12px;
-              margin-bottom: 16px;
-              padding-bottom: 12px;
-              border-bottom: 1px solid var(--border-color);
-            }
-
-            .geo-dual-header .geo-item-title {
-              font-size: 14px;
-              font-weight: 600;
-              color: var(--text-primary);
-              flex: 1;
-            }
-
-            .geo-dual-header .geo-item-weight {
-              font-size: 12px;
-              font-weight: 600;
-              color: var(--status-active);
-              background: rgba(42, 108, 240, 0.1);
-              padding: 4px 8px;
-              border-radius: 12px;
-            }
-
-            .geo-dual-results {
-              display: grid;
-              grid-template-columns: 1fr 1fr;
-              gap: 16px;
-            }
-
-            .geo-dual-col {
-              background: var(--bg-primary);
-              border: 1px solid var(--border-color);
-              border-radius: var(--radius-md);
-              padding: 12px;
-            }
-
-            .geo-dual-label {
-              font-size: 12px;
-              font-weight: 600;
-              color: var(--text-secondary);
-              margin-bottom: 8px;
-            }
-
-            .geo-dual-status {
-              font-size: 13px;
-              font-weight: 600;
-              margin-bottom: 8px;
-            }
-
-            .geo-dual-status.passed {
-              color: var(--status-success);
-            }
-
-            .geo-dual-status.failed {
-              color: var(--status-error);
-            }
-
-            .geo-dual-col .geo-item-hint {
-              font-size: 12px;
-              color: var(--text-secondary);
-              margin-top: 8px;
-              padding: 8px;
-              background: rgba(245, 158, 11, 0.05);
-              border-left: 3px solid rgba(245, 158, 11, 0.4);
-              border-radius: 4px;
-            }
-
-            /* 공통 힌트 (둘 다 실패 시) */
-            .geo-item-hint-common {
-              font-size: 12px;
-              color: var(--text-secondary);
-              margin-top: 12px;
-              padding: 8px;
-              background: rgba(245, 158, 11, 0.05);
-              border-left: 3px solid rgba(245, 158, 11, 0.4);
-              border-radius: 4px;
-            }
-
-            /* 교육 툴팁 - 물음표 아이콘 */
-            .geo-education-icon {
-              display: inline-flex;
-              align-items: center;
-              justify-content: center;
-              width: 16px;
-              height: 16px;
-              margin-left: 6px;
-              color: var(--status-active);
-              cursor: help;
-              position: relative;
-              vertical-align: middle;
-              opacity: 0.7;
-              transition: opacity 0.2s;
-            }
-
-            .geo-education-icon:hover {
-              opacity: 1;
-            }
-
-            /* 툴팁 */
-            .geo-education-icon::after {
-              content: attr(data-tooltip);
-              position: absolute;
-              left: 50%;
-              bottom: calc(100% + 8px);
-              transform: translateX(-50%);
-              padding: 12px;
-              background: var(--bg-primary);
-              border: 1px solid var(--border-color);
-              border-radius: var(--radius-md);
-              box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
-              font-size: 12px;
-              line-height: 1.5;
-              color: var(--text-primary);
-              white-space: pre-wrap;
-              max-width: 400px;
-              width: max-content;
-              z-index: 1000;
-              opacity: 0;
-              pointer-events: none;
-              transition: opacity 0.2s;
-            }
-
-            .geo-education-icon:hover::after {
-              opacity: 1;
-              pointer-events: auto;
-            }
-
-            /* 툴팁 화살표 */
-            .geo-education-icon::before {
-              content: '';
-              position: absolute;
-              left: 50%;
-              bottom: calc(100% + 2px);
-              transform: translateX(-50%);
-              width: 0;
-              height: 0;
-              border-left: 6px solid transparent;
-              border-right: 6px solid transparent;
-              border-top: 6px solid var(--border-color);
-              z-index: 1001;
-              opacity: 0;
-              pointer-events: none;
-              transition: opacity 0.2s;
-            }
-
-            .geo-education-icon:hover::before {
-              opacity: 1;
-            }
-
-            /* === AI 컨설턴트 분석 섹션 === */
-            .geo-ai-analysis {
-              background: var(--bg-card);
-              border: 1px solid var(--border-color);
-              border-radius: var(--radius-lg);
-              padding: var(--space-lg);
-              margin-top: 32px;
-              margin-bottom: var(--space-md);
-            }
-
-            .geo-ai-analysis > h3 {
-              font-size: 16px;
-              font-weight: 700;
-              color: var(--text-primary);
-              margin-bottom: 24px;
-              padding-bottom: 12px;
-              border-bottom: 2px solid var(--border-color);
-            }
-
-            .geo-ai-section {
-              margin-bottom: 28px;
-              padding: 16px;
-              background: var(--bg-secondary);
-              border: 1px solid var(--border-color);
-              border-radius: var(--radius-md);
-            }
-
-            .geo-ai-section:last-child {
-              margin-bottom: 0;
-            }
-
-            .geo-ai-section > h4 {
-              font-size: 14px;
-              font-weight: 600;
-              color: var(--text-primary);
-              margin-bottom: 16px;
-              padding-bottom: 8px;
-              border-bottom: 1px solid var(--border-color);
-            }
-
-            .geo-ai-content {
-              font-size: 13px;
-              color: var(--text-secondary);
-              line-height: 1.6;
-            }
-
-            .geo-ai-content p {
-              margin-bottom: 12px;
-            }
-
-            .geo-ai-content p:last-child {
-              margin-bottom: 0;
-            }
-
-            /* 토스트 info 타입 스타일 */
-            .toast.info {
-              background: var(--status-active);
-            }
-
-            @keyframes spin {
-              to { transform: rotate(360deg); }
-            }
-          </style>
+          <div class="tools-card-stack">
+            <div class="tools-panel active" data-tools-panel-content="cleanup">
+              <div class="tools-card card">
+                <div class="tools-card-header">
+                  <div class="tools-card-head-row">
+                    <div class="tools-card-head-group">
+                      <div class="tools-card-head">브라우저 정리</div>
+                      <span class="geo-tooltip-icon translation-tooltip-icon" tabindex="0" role="img" aria-label="각 항목 오른쪽에서 기간을 고른 뒤 삭제합니다. 현재 사이트 데이터 삭제는 로그인이 풀릴 수 있습니다." data-tooltip="각 항목 오른쪽에서 기간을 고른 뒤 삭제합니다. 현재 사이트 데이터 삭제는 로그인이 풀릴 수 있습니다.">?</span>
+                    </div>
+                  </div>
+                  <div class="tools-current-site">
+                    <span class="tools-current-site-label">현재 사이트</span>
+                    <span id="toolsCurrentSiteValue" class="tools-current-site-value">확인 중</span>
+                  </div>
+                </div>
+
+                <div class="tools-action-stack">
+                  <div class="tools-action-row action-row" data-cleanup-row="globalCache">
+                    <div class="tools-action-body">
+                      <div class="tools-action-title-row">
+                        <span class="tools-action-title">전체 브라우저 캐시 삭제</span>
+                        <span class="geo-tooltip-icon translation-tooltip-icon" tabindex="0" role="img" aria-label="선택한 기간의 캐시된 이미지와 파일을 정리합니다." data-tooltip="선택한 기간의 캐시된 이미지와 파일을 정리합니다.">?</span>
+                      </div>
+                    </div>
+                    <div class="tools-action-controls">
+                      <label class="tools-inline-select-wrap">
+                        <select class="tools-inline-select inline-select" data-cleanup-range="globalCache" aria-label="전체 브라우저 캐시 삭제 기간">
+                          <option value="15m">15분</option>
+                          <option value="1h">1시간</option>
+                          <option value="24h" selected>24시간</option>
+                          <option value="7d">7일</option>
+                          <option value="all">전체</option>
+                        </select>
+                      </label>
+                      <button type="button" class="tools-action-btn" data-cleanup-action="globalCache">
+                        <span data-role="cleanup-label">삭제</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  <div class="tools-action-row action-row" data-cleanup-row="siteCache">
+                    <div class="tools-action-body">
+                      <div class="tools-action-title-row">
+                        <span class="tools-action-title">현재 사이트 캐시 삭제</span>
+                        <span class="geo-tooltip-icon translation-tooltip-icon" tabindex="0" role="img" aria-label="현재 사이트 origin의 캐시된 파일만 비웁니다." data-tooltip="현재 사이트 origin의 캐시된 파일만 비웁니다.">?</span>
+                      </div>
+                    </div>
+                    <div class="tools-action-controls">
+                      <label class="tools-inline-select-wrap">
+                        <select class="tools-inline-select inline-select" data-cleanup-range="siteCache" aria-label="현재 사이트 캐시 삭제 기간">
+                          <option value="15m">15분</option>
+                          <option value="1h">1시간</option>
+                          <option value="24h" selected>24시간</option>
+                          <option value="7d">7일</option>
+                          <option value="all">전체</option>
+                        </select>
+                      </label>
+                      <button type="button" class="tools-action-btn" data-cleanup-action="siteCache">
+                        <span data-role="cleanup-label">삭제</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  <div class="tools-action-row action-row" data-cleanup-row="siteStorage">
+                    <div class="tools-action-body">
+                      <div class="tools-action-title-row">
+                        <span class="tools-action-title">현재 사이트 데이터 삭제</span>
+                        <span class="geo-tooltip-icon translation-tooltip-icon" tabindex="0" role="img" aria-label="쿠키, 로컬스토리지, IndexedDB, Cache Storage 같은 현재 사이트 데이터를 지웁니다. 로그인이 풀릴 수 있습니다." data-tooltip="쿠키, 로컬스토리지, IndexedDB, Cache Storage 같은 현재 사이트 데이터를 지웁니다. 로그인이 풀릴 수 있습니다.">?</span>
+                      </div>
+                    </div>
+                    <div class="tools-action-controls">
+                      <label class="tools-inline-select-wrap">
+                        <select class="tools-inline-select inline-select" data-cleanup-range="siteStorage" aria-label="현재 사이트 데이터 삭제 기간">
+                          <option value="15m">15분</option>
+                          <option value="1h">1시간</option>
+                          <option value="24h" selected>24시간</option>
+                          <option value="7d">7일</option>
+                          <option value="all">전체</option>
+                        </select>
+                      </label>
+                      <button type="button" class="tools-action-btn" data-cleanup-action="siteStorage">
+                        <span data-role="cleanup-label">삭제</span>
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                <div id="toolsCleanupMeta" class="tools-card-footnote">현재 사이트를 확인하는 중입니다.</div>
+              </div>
+            </div>
+
+            <div class="tools-panel" data-tools-panel-content="visits">
+              <div class="tools-range-strip">
+                <div class="tools-range-chips" role="group" aria-label="방문 TOP 기간 선택">
+                  <button type="button" class="tools-range-chip chip" data-tools-range="15m" aria-pressed="false">15분</button>
+                  <button type="button" class="tools-range-chip chip" data-tools-range="1h" aria-pressed="false">1시간</button>
+                  <button type="button" class="tools-range-chip chip active" data-tools-range="24h" aria-pressed="true">24시간</button>
+                  <button type="button" class="tools-range-chip chip" data-tools-range="7d" aria-pressed="false">7일</button>
+                  <button type="button" class="tools-range-chip chip" data-tools-range="all" aria-pressed="false">전체</button>
+                </div>
+                <div id="toolsRangeSummary" class="tools-range-summary">지난 24시간 기준</div>
+              </div>
+
+              <div class="tools-card card">
+                <div class="tools-card-header">
+                  <div class="tools-card-head-row">
+                    <div class="tools-card-head">방문 TOP 100</div>
+                    <div id="toolsVisitMeta" class="tools-card-mini-meta">0개 사이트</div>
+                  </div>
+                  <div id="toolsVisitSummary" class="tools-card-meta">지난 24시간 기준 방문 TOP 100</div>
+                </div>
+                <div id="toolsVisitLoading" class="tools-visit-loading" style="display: none;">방문 TOP 100을 불러오는 중...</div>
+                <div id="toolsVisitEmpty" class="tools-visit-empty">지난 24시간 기준 방문 기록을 확인할 수 있습니다.</div>
+                <div id="toolsVisitList" class="tools-visit-list" style="display: none;"></div>
+              </div>
+            </div>
+          </div>
         </div>
 
         <!-- 검색 탭 -->
@@ -3497,34 +499,125 @@
           </div>
         </div>
 
+        <!-- 오류 센터 탭 -->
+        <div id="errorsTab" class="tab-content">
+          <div class="errors-stack">
+            <section class="errors-summary-card card">
+              <div class="errors-card-header">
+                <div class="errors-card-head-group">
+                  <div class="errors-card-head">오류 현황</div>
+                  <span class="geo-tooltip-icon translation-tooltip-icon" tabindex="0" role="img" aria-label="확장 내부에서 수집한 최근 오류와 경고 로그를 확인합니다. chrome://extensions 오류 목록과 완전히 같지는 않을 수 있습니다." data-tooltip="확장 내부에서 수집한 최근 오류와 경고 로그를 확인합니다. chrome://extensions 오류 목록과 완전히 같지는 않을 수 있습니다.">?</span>
+                </div>
+              </div>
+
+              <div class="errors-summary-grid">
+                <div class="errors-summary-stat">
+                  <span id="errorsIssueCount" class="errors-summary-value">0</span>
+                  <span class="errors-summary-label">이슈</span>
+                </div>
+                <div class="errors-summary-stat">
+                  <span id="errorsErrorCount" class="errors-summary-value">0</span>
+                  <span class="errors-summary-label">오류</span>
+                </div>
+                <div class="errors-summary-stat">
+                  <span id="errorsWarnCount" class="errors-summary-value">0</span>
+                  <span class="errors-summary-label">경고</span>
+                </div>
+                <div class="errors-summary-stat">
+                  <span id="errorsLogCount" class="errors-summary-value">0</span>
+                  <span class="errors-summary-label">전체 로그</span>
+                </div>
+              </div>
+
+              <div class="errors-toolbar">
+                <button id="errorCenterCopySummaryBtn" type="button" class="errors-toolbar-btn chip">요약 복사</button>
+                <button id="errorCenterCopyErrorsBtn" type="button" class="errors-toolbar-btn chip">오류 로그</button>
+                <button id="errorCenterCopyAllBtn" type="button" class="errors-toolbar-btn chip">전체 로그</button>
+                <button id="errorCenterClearBtn" type="button" class="errors-toolbar-btn chip errors-toolbar-btn-danger">모두 삭제</button>
+              </div>
+            </section>
+
+            <section class="errors-list-card card">
+              <div class="errors-card-header errors-list-header">
+                <div class="errors-card-head-group">
+                  <div class="errors-card-head">최근 로그</div>
+                  <span class="geo-tooltip-icon translation-tooltip-icon" tabindex="0" role="img" aria-label="최근 WARN/ERROR 로그만 최신순으로 보여줍니다. 스택은 있는 경우에만 펼쳐서 확인할 수 있습니다." data-tooltip="최근 WARN/ERROR 로그만 최신순으로 보여줍니다. 스택은 있는 경우에만 펼쳐서 확인할 수 있습니다.">?</span>
+                </div>
+                <div id="errorsListMeta" class="errors-list-meta">최근 0개 표시</div>
+              </div>
+
+              <div id="errorsEmpty" class="errors-empty">현재 쌓인 오류가 없습니다.</div>
+              <div id="errorsList" class="errors-list"></div>
+            </section>
+          </div>
+        </div>
+
         <!-- 설정 탭 -->
         <div id="settingsTab" class="tab-content">
           <!-- API 설정 -->
           <div class="settings-section">
             <div class="settings-title">프로바이더 API Key</div>
 
-            <div class="form-group">
-              <div class="form-group-header">
-                <label for="openRouterApiKey">OpenRouter API Key</label>
-                <a class="form-group-link" href="https://openrouter.ai/keys" target="_blank">키 발급받기 →</a>
+            <div class="settings-provider-stack card">
+              <div class="settings-provider-item">
+                <div class="settings-provider-row">
+                  <label for="openRouterApiKey" class="settings-provider-label">OpenRouter API Key</label>
+                  <div class="settings-provider-actions">
+                    <a class="form-group-link" href="https://openrouter.ai/keys" target="_blank" rel="noopener noreferrer">키 발급</a>
+                    <button
+                      type="button"
+                      class="settings-provider-delete-btn"
+                      data-action="clear-api-key"
+                      data-target-input="openRouterApiKey"
+                      data-provider-label="OpenRouter"
+                      aria-label="OpenRouter API Key 삭제"
+                    >
+                      삭제
+                    </button>
+                  </div>
+                </div>
+                <input type="password" id="openRouterApiKey" placeholder="sk-or-v1-..." autocomplete="off">
               </div>
-              <input type="password" id="openRouterApiKey" placeholder="sk-or-v1-...">
-            </div>
 
-            <div class="form-group">
-              <div class="form-group-header">
-                <label for="openAIApiKey">OpenAI API Key</label>
-                <a class="form-group-link" href="https://platform.openai.com/api-keys" target="_blank">키 발급받기 →</a>
+              <div class="settings-provider-item">
+                <div class="settings-provider-row">
+                  <label for="openAIApiKey" class="settings-provider-label">OpenAI API Key</label>
+                  <div class="settings-provider-actions">
+                    <a class="form-group-link" href="https://platform.openai.com/api-keys" target="_blank" rel="noopener noreferrer">키 발급</a>
+                    <button
+                      type="button"
+                      class="settings-provider-delete-btn"
+                      data-action="clear-api-key"
+                      data-target-input="openAIApiKey"
+                      data-provider-label="OpenAI"
+                      aria-label="OpenAI API Key 삭제"
+                    >
+                      삭제
+                    </button>
+                  </div>
+                </div>
+                <input type="password" id="openAIApiKey" placeholder="sk-..." autocomplete="off">
               </div>
-              <input type="password" id="openAIApiKey" placeholder="sk-...">
-            </div>
 
-            <div class="form-group">
-              <div class="form-group-header">
-                <label for="geminiApiKey">Gemini API Key</label>
-                <a class="form-group-link" href="https://aistudio.google.com/app/apikey" target="_blank">키 발급받기 →</a>
+              <div class="settings-provider-item">
+                <div class="settings-provider-row">
+                  <label for="geminiApiKey" class="settings-provider-label">Gemini API Key</label>
+                  <div class="settings-provider-actions">
+                    <a class="form-group-link" href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener noreferrer">키 발급</a>
+                    <button
+                      type="button"
+                      class="settings-provider-delete-btn"
+                      data-action="clear-api-key"
+                      data-target-input="geminiApiKey"
+                      data-provider-label="Gemini"
+                      aria-label="Gemini API Key 삭제"
+                    >
+                      삭제
+                    </button>
+                  </div>
+                </div>
+                <input type="password" id="geminiApiKey" placeholder="AIza..." autocomplete="off">
               </div>
-              <input type="password" id="geminiApiKey" placeholder="AIza...">
             </div>
           </div>
 
@@ -3532,7 +625,7 @@
           <div class="settings-section">
             <div class="settings-title">번역 설정</div>
 
-            <div class="settings-control-stack">
+            <div class="settings-control-stack card">
               <div class="settings-control-card">
                 <div class="settings-control-row">
                   <label for="autoTranslate" class="settings-control-label">
@@ -3549,8 +642,8 @@
               <div class="settings-control-card">
                 <div class="settings-control-row">
                   <label for="selectionTranslateEnabled" class="settings-control-label">
-                    <span>선택 텍스트 번역</span>
-                    <span class="geo-tooltip-icon translation-tooltip-icon" tabindex="0" role="img" aria-label="페이지에서 텍스트를 드래그하면 작은 번역 버튼과 선택 번역 팝오버를 켜거나 끕니다." data-tooltip="페이지에서 텍스트를 드래그하면 작은 번역 버튼과 선택 번역 팝오버를 켜거나 끕니다.">?</span>
+                    <span>드래그 액션바</span>
+                    <span class="geo-tooltip-icon translation-tooltip-icon" tabindex="0" role="img" aria-label="페이지에서 텍스트를 드래그할 때 뜨는 번역/복사/설명하기 액션바를 켜거나 끕니다. 꺼도 우클릭 메뉴의 선택 텍스트 번역은 계속 사용할 수 있습니다." data-tooltip="페이지에서 텍스트를 드래그할 때 뜨는 번역/복사/설명하기 액션바를 켜거나 끕니다. 꺼도 우클릭 메뉴의 선택 텍스트 번역은 계속 사용할 수 있습니다.">?</span>
                   </label>
                   <label class="toggle-switch">
                     <input type="checkbox" id="selectionTranslateEnabled" checked>
@@ -3607,19 +700,19 @@
     <nav class="vertical-tabbar" role="tablist">
       <button role="tab" data-tab="translate" aria-selected="true" title="번역">
         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
-          <path d="M12.87 15.07l-2.54-2.51.03-.03A17.52 17.52 0 0014.07 6H17V4h-7V2H8v2H1v2h11.17C11.5 7.92 10.44 9.75 9 11.35 8.07 10.32 7.3 9.19 6.69 8h-2c.73 1.63 1.73 3.17 2.98 4.56l-5.09 5.02L4 19l5-5 3.11 3.11.76-2.04zM18.5 10h-2L12 22h2l1.12-3h4.75L21 22h2l-4.5-12zm-2.62 7l1.62-4.33L19.12 17h-3.24z"/>
+          <path d="M12.87 15.07l-2.54-2.51.03-.03A17.52 17.52 0 0 0 14.07 6H17V4h-7V2H8v2H1v2h11.17A15.7 15.7 0 0 1 9 11.35 16.17 16.17 0 0 1 6.69 8h-2a17.34 17.34 0 0 0 2.98 4.56L2.58 17.6 4 19l5-5 3.11 3.11.76-2.04zM18.5 10h-2L12 22h2l1.12-3h4.75L21 22h2l-4.5-12zm-2.62 7 1.62-4.33L19.12 17h-3.24z"/>
         </svg>
         <span>번역</span>
       </button>
 
-      <button role="tab" data-tab="quickTranslate" aria-selected="false" title="텍스트 번역">
-        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
-          <path d="M21,5c0-1.11-0.89-2-2-2H5C3.89,3,3,3.89,3,5v14c0,1.11,0.89,2,2,2h14c1.11,0,2-0.89,2-2V5z M19,19H5V5h14V19z M16.5,13.5 l-4.5-4.5L7.5,13.5L9,15l2-2v6h2v-6l2,2L16.5,13.5z"/>
-        </svg>
-        <span>텍스트</span>
-      </button>
-
       <div class="tabbar-divider" role="presentation" aria-hidden="true"></div>
+
+      <button role="tab" data-tab="geo" aria-selected="false" title="페이지 진단" aria-label="페이지 진단">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+          <path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H5V8h14v11zm0-13H5V5h14v1z"/>
+        </svg>
+        <span>진단</span>
+      </button>
 
       <button role="tab" data-tab="search" aria-selected="false" title="검색">
         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
@@ -3628,11 +721,11 @@
         <span>검색</span>
       </button>
 
-      <button role="tab" data-tab="geo" aria-selected="false" title="SEO 검사">
+      <button role="tab" data-tab="tools" aria-selected="false" title="도구">
         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
-          <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/>
+          <path d="M22.7 19 13.6 9.9c.8-2.2.3-4.8-1.4-6.5-1.9-1.9-4.6-2.3-6.9-1.3L9.2 6 6 9.2 2.1 5.3C1 7.6 1.4 10.3 3.3 12.2c1.7 1.7 4.3 2.2 6.5 1.4L19 22.7 22.7 19z"/>
         </svg>
-        <span>SEO 검사</span>
+        <span>도구</span>
       </button>
 
       <button role="tab" data-tab="recurring" aria-selected="false" title="반복관리">
@@ -3644,18 +737,26 @@
 
       <div class="tabbar-divider" role="presentation" aria-hidden="true"></div>
 
-      <button id="githubLinkBtn" type="button" title="최신버전" aria-label="최신버전">
-        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
-          <path d="M5 5v14h14v-7h-2v5H7V7h5V5H5zm9-2v2h3.59l-9.83 9.83 1.41 1.41L19 6.41V10h2V3h-7z"/>
-        </svg>
-        <span>최신버전</span>
-      </button>
-
       <button role="tab" data-tab="settings" aria-selected="false" title="설정">
         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
           <path d="M19.14,12.94c0.04-0.3,0.06-0.61,0.06-0.94c0-0.32-0.02-0.64-0.07-0.94l2.03-1.58c0.18-0.14,0.23-0.41,0.12-0.61 l-1.92-3.32c-0.12-0.22-0.37-0.29-0.59-0.22l-2.39,0.96c-0.5-0.38-1.03-0.7-1.62-0.94L14.4,2.81c-0.04-0.24-0.24-0.41-0.48-0.41 h-3.84c-0.24,0-0.43,0.17-0.47,0.41L9.25,5.35C8.66,5.59,8.12,5.92,7.63,6.29L5.24,5.33c-0.22-0.08-0.47,0-0.59,0.22L2.74,8.87 C2.62,9.08,2.66,9.34,2.86,9.48l2.03,1.58C4.84,11.36,4.8,11.69,4.8,12s0.02,0.64,0.07,0.94l-2.03,1.58 c-0.18,0.14-0.23,0.41-0.12,0.61l1.92,3.32c0.12,0.22,0.37,0.29,0.59,0.22l2.39-0.96c0.5,0.38,1.03,0.7,1.62,0.94l0.36,2.54 c0.05,0.24,0.24,0.41,0.48,0.41h3.84c0.24,0,0.44-0.17,0.47-0.41l0.36-2.54c0.59-0.24,1.13-0.56,1.62-0.94l2.39,0.96 c0.22,0.08,0.47,0,0.59-0.22l1.92-3.32c0.12-0.22,0.07-0.47-0.12-0.61L19.14,12.94z M12,15.6c-1.98,0-3.6-1.62-3.6-3.6 s1.62-3.6,3.6-3.6s3.6,1.62,3.6,3.6S13.98,15.6,12,15.6z"/>
         </svg>
         <span>설정</span>
+      </button>
+
+      <button role="tab" data-tab="errors" aria-selected="false" title="오류 센터" aria-label="오류 센터">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+          <path d="M1 21h22L12 2 1 21zm12-3h-2v-2h2v2zm0-4h-2v-4h2v4z"/>
+        </svg>
+        <span>오류</span>
+        <span id="errorTabBadge" class="tab-badge" hidden>0</span>
+      </button>
+
+      <button id="githubLinkBtn" type="button" title="최신버전" aria-label="최신버전">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+          <path d="M5 5v14h14v-7h-2v5H7V7h5V5H5zm9-2v2h3.59l-9.83 9.83 1.41 1.41L19 6.41V10h2V3h-7z"/>
+        </svg>
+        <span>최신버전</span>
       </button>
     </nav>
   </div>
@@ -3666,3 +767,4 @@
   <script type="module" src="sidepanel/bootstrap.js"></script>
 </body>
 </html>
+

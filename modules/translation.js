@@ -11,23 +11,25 @@
 import { logInfo, logDebug, logError } from '../logger.js';
 import { ACTIONS, PORT_MESSAGES, PORT_NAMES } from './constants.js';
 import {
-  currentTabId,
-  translationState,
-  translationStateByTab,
-  translateModeByTab,
   autoTranslateTriggeredByTab,
-  permissionGranted,
+  createDefaultTranslationState,
+  getCurrentTabId,
+  getPermissionGranted,
+  getPortForTab,
+  getTranslationState,
+  removePortForTab,
   setCurrentTabId,
   setPermissionGranted,
-  setTranslationState,
-  createDefaultTranslationState,
-  getPortForTab,
   setPortForTab,
-  removePortForTab
+  setTranslationState,
+  translationStateByTab,
+  translateModeByTab
 } from './state.js';
 import { updateUI, resetTranslateUI, showToast, ensurePageContentScript } from './ui-utils.js';
 import { handleTranslationCompletedForHistory } from './history.js';
 import { updateApiKeyUI, updatePageCacheStatus } from './settings.js';
+import { CONTENT_SCRIPT_FILES } from './panel-constants.js';
+import { escapeHtml, renderTooltipIcon } from './panel-dom.js';
 import {
   DEFAULT_PROFILE,
   FAST_PAGE_ENGINE_LABEL,
@@ -39,18 +41,18 @@ import {
 import { getActiveTranslationConfig, getConfiguredProviders, updateActiveTranslationConfig } from './storage.js';
 
 const EXPECTED_CONTENT_RUNTIME_VERSION = '2026-03-12-content-v3';
-const CONTENT_SCRIPT_FILES = [
-  'content/bootstrap.js',
-  'content/api.js',
-  'content/provider.js',
-  'content/cache.js',
-  'content/industry.js',
-  'content/dom.js',
-  'content/title.js',
-  'content/progress.js',
-  'content/selection.js',
-  'content.js'
-];
+
+function currentTabIdValue() {
+  return getCurrentTabId();
+}
+
+function permissionGrantedValue() {
+  return getPermissionGranted();
+}
+
+function translationStateValue() {
+  return getTranslationState();
+}
 
 /**
  * 번역 탭 상단 컨트롤 초기화
@@ -58,9 +60,17 @@ const CONTENT_SCRIPT_FILES = [
 export async function initTranslationTab() {
   bindTranslationActionButtons();
   bindTranslationConfigControls();
+  await refreshTranslationConfigUI();
+}
+
+export async function refreshTranslationConfigUI(options = {}) {
+  const shouldUpdateButtons = options.updateButtons === true;
   await syncTranslationConfigControls();
   await updateApiKeyUI();
   updateTranslationConfigSummary();
+  if (shouldUpdateButtons) {
+    updateUIByPermission();
+  }
 }
 
 function bindTranslationActionButtons() {
@@ -69,12 +79,13 @@ function bindTranslationActionButtons() {
 }
 
 function isRestoreToggleState(profile) {
-  const currentProfile = translationState.profile === 'precise' ? 'precise' : 'fast';
+  const currentState = translationStateValue();
+  const currentProfile = currentState.profile === 'precise' ? 'precise' : 'fast';
   if (currentProfile !== profile) {
     return false;
   }
 
-  return ['analyzing', 'translating', 'completed', 'error'].includes(translationState.state);
+  return ['analyzing', 'translating', 'completed', 'error'].includes(currentState.state);
 }
 
 async function handleTranslationAction(profile) {
@@ -173,19 +184,6 @@ function populateModelSelect(providerId, selectedModel) {
     : catalog.defaultModel;
 }
 
-function escapeHtml(value) {
-  return String(value || '')
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;');
-}
-
-function renderTooltipIcon(text) {
-  return `<span class="geo-tooltip-icon translation-tooltip-icon" tabindex="0" role="img" aria-label="${escapeHtml(text)}" data-tooltip="${escapeHtml(text)}">?</span>`;
-}
-
 function updateTranslationConfigSummary() {
   const summaryEl = document.getElementById('providerSummary');
   if (!summaryEl) {
@@ -263,24 +261,29 @@ export function initializeTranslationState() {
 }
 
 export async function handleTabChange(tab) {
-  const fromId = currentTabId;
-  if (translationState.state === 'translating' && tab?.id === currentTabId) {
+  const fromId = currentTabIdValue();
+  const currentState = translationStateValue();
+  if (currentState.state === 'translating' && tab?.id === fromId) {
     return;
   }
 
-  if (translationState.state === 'translating' && currentTabId) {
-    translationStateByTab.set(currentTabId, { ...translationState, batches: [...translationState.batches] });
+  if (currentState.state === 'translating' && fromId) {
+    translationStateByTab.set(fromId, {
+      ...currentState,
+      batches: [...currentState.batches]
+    });
   }
 
   if (tab?.id) {
     setCurrentTabId(tab.id);
   }
 
-  if (fromId && fromId !== currentTabId && translationState.state !== 'translating') {
+  const activeTabId = currentTabIdValue();
+  if (fromId && fromId !== activeTabId && currentState.state !== 'translating') {
     removePortForTab(fromId, { disconnect: true });
   }
 
-  const savedState = currentTabId ? translationStateByTab.get(currentTabId) : null;
+  const savedState = activeTabId ? translationStateByTab.get(activeTabId) : null;
   if (savedState && (savedState.state === 'translating' || savedState.state === 'completed' || savedState.state === 'restored')) {
     setTranslationState({ ...savedState, batches: [...(savedState.batches || [])] });
   } else {
@@ -291,16 +294,14 @@ export async function handleTabChange(tab) {
     await checkPermissions(tab);
   }
 
-  await syncTranslationConfigControls();
-  await updateApiKeyUI();
-  updateTranslationConfigSummary();
-  updateUIByPermission();
+  await refreshTranslationConfigUI({ updateButtons: true });
 
-  if (translationState.state === 'translating' && currentTabId && !getPortForTab(currentTabId)) {
-    connectToContentScript(currentTabId);
+  const nextState = translationStateValue();
+  if (nextState.state === 'translating' && activeTabId && !getPortForTab(activeTabId)) {
+    connectToContentScript(activeTabId);
   }
 
-  if (permissionGranted && !autoTranslateTriggeredByTab.get(currentTabId) && translationState.state === 'inactive') {
+  if (permissionGrantedValue() && activeTabId && !autoTranslateTriggeredByTab.get(activeTabId) && nextState.state === 'inactive') {
     setTimeout(() => {
       void checkAutoTranslate();
     }, 250);
@@ -308,10 +309,11 @@ export async function handleTabChange(tab) {
 }
 
 async function checkAutoTranslate() {
-  if (!currentTabId || !permissionGranted) {
+  const activeTabId = currentTabIdValue();
+  if (!activeTabId || !permissionGrantedValue()) {
     return;
   }
-  if (autoTranslateTriggeredByTab.get(currentTabId)) {
+  if (autoTranslateTriggeredByTab.get(activeTabId)) {
     return;
   }
 
@@ -329,17 +331,18 @@ async function checkAutoTranslate() {
     return;
   }
 
-  autoTranslateTriggeredByTab.set(currentTabId, true);
+  autoTranslateTriggeredByTab.set(activeTabId, true);
   await handleStartPageTranslation(config.profile || DEFAULT_PROFILE);
 }
 
 async function checkHasCachedData() {
-  if (!currentTabId) {
+  const activeTabId = currentTabIdValue();
+  if (!activeTabId) {
     return false;
   }
 
   try {
-    const response = await chrome.tabs.sendMessage(currentTabId, { action: ACTIONS.GET_CACHE_STATUS });
+    const response = await chrome.tabs.sendMessage(activeTabId, { action: ACTIONS.GET_CACHE_STATUS });
     return Boolean(response?.success && response.count > 0);
   } catch (_) {
     return false;
@@ -347,7 +350,7 @@ async function checkHasCachedData() {
 }
 
 function updateUIByPermission() {
-  updateUI(permissionGranted);
+  updateUI(permissionGrantedValue());
 }
 
 export async function checkPermissions(tab) {
@@ -379,12 +382,13 @@ export async function checkPermissions(tab) {
 }
 
 export async function handleRequestPermission() {
-  if (!currentTabId) {
+  const activeTabId = currentTabIdValue();
+  if (!activeTabId) {
     return;
   }
 
   try {
-    const tab = await chrome.tabs.get(currentTabId);
+    const tab = await chrome.tabs.get(activeTabId);
     const url = new URL(tab.url);
     const origin = `${url.protocol}//${url.host}/*`;
     const granted = await chrome.permissions.request({ origins: [origin] });
@@ -395,7 +399,7 @@ export async function handleRequestPermission() {
     }
 
     await chrome.scripting.executeScript({
-      target: { tabId: currentTabId },
+      target: { tabId: activeTabId },
       files: CONTENT_SCRIPT_FILES
     });
 
@@ -465,7 +469,7 @@ function connectToContentScript(tabId) {
       }
 
       translationStateByTab.set(tabId, { ...msg.data, batches: [...(msg.data.batches || [])] });
-      if (tabId === currentTabId) {
+      if (tabId === currentTabIdValue()) {
         setTranslationState({ ...msg.data, batches: [...(msg.data.batches || [])] });
         updateUI();
       }
@@ -484,12 +488,13 @@ function connectToContentScript(tabId) {
 }
 
 export async function handleStartPageTranslation(profile = DEFAULT_PROFILE) {
-  if (!currentTabId) {
+  const activeTabId = currentTabIdValue();
+  if (!activeTabId) {
     showToast('활성 탭을 찾을 수 없습니다.', 'error');
     return;
   }
 
-  const tab = await chrome.tabs.get(currentTabId);
+  const tab = await chrome.tabs.get(activeTabId);
   const supportType = getSupportType(tab.url || '');
   await checkPermissions(tab);
 
@@ -497,11 +502,11 @@ export async function handleStartPageTranslation(profile = DEFAULT_PROFILE) {
     showToast('이 페이지는 브라우저 정책상 번역을 지원하지 않습니다.', 'error');
     return;
   }
-  if (supportType === 'file' && !permissionGranted) {
+  if (supportType === 'file' && !permissionGrantedValue()) {
     showToast('파일 URL 접근 권한을 허용해야 번역할 수 있습니다.', 'error');
     return;
   }
-  if (supportType === 'requestable' && !permissionGranted) {
+  if (supportType === 'requestable' && !permissionGrantedValue()) {
     showToast('이 사이트를 번역하려면 접근 권한이 필요합니다.', 'error');
     return;
   }
@@ -519,23 +524,23 @@ export async function handleStartPageTranslation(profile = DEFAULT_PROFILE) {
     return;
   }
 
-  const isReady = await ensureContentScriptReady(currentTabId);
+  const isReady = await ensureContentScriptReady(activeTabId);
   if (!isReady) {
     showToast('확장 업데이트 적용을 위해 현재 페이지를 한 번 새로고침한 뒤 다시 번역해주세요.', 'error');
     return;
   }
 
-  if (!getPortForTab(currentTabId)) {
-    connectToContentScript(currentTabId);
+  if (!getPortForTab(activeTabId)) {
+    connectToContentScript(activeTabId);
   }
 
-  translateModeByTab.set(currentTabId, selectedProfile === 'precise' ? 'fresh' : 'fast');
+  translateModeByTab.set(activeTabId, selectedProfile === 'precise' ? 'fresh' : 'fast');
 
   const action = selectedProfile === 'precise'
     ? ACTIONS.START_PRECISE_RETRANSLATION
     : ACTIONS.START_PAGE_TRANSLATION;
 
-  await chrome.tabs.sendMessage(currentTabId, {
+  await chrome.tabs.sendMessage(activeTabId, {
     action,
     provider: activeConfig.provider,
     apiKey: activeConfig.apiKey,
@@ -544,7 +549,7 @@ export async function handleStartPageTranslation(profile = DEFAULT_PROFILE) {
   });
 
   logInfo('sidepanel', 'TRANSLATION_START', '페이지 번역 시작', {
-    tabId: currentTabId,
+    tabId: activeTabId,
     provider: selectedProfile === 'precise' ? activeConfig.provider : FAST_PAGE_PROVIDER,
     model: selectedProfile === 'precise' ? activeConfig.model : FAST_PAGE_MODEL,
     profile: selectedProfile
@@ -560,12 +565,13 @@ export async function handleTranslateAll(useCache = true) {
 }
 
 export async function handleRestore() {
-  if (!currentTabId) {
+  const activeTabId = currentTabIdValue();
+  if (!activeTabId) {
     return;
   }
 
   try {
-    const tab = await chrome.tabs.get(currentTabId);
+    const tab = await chrome.tabs.get(activeTabId);
     const supportType = getSupportType(tab.url || '');
     await checkPermissions(tab);
 
@@ -573,26 +579,26 @@ export async function handleRestore() {
       showToast('이 페이지는 브라우저 정책상 원문 보기를 지원하지 않습니다.', 'error');
       return;
     }
-    if (!permissionGranted) {
+    if (!permissionGrantedValue()) {
       showToast('이 페이지에 대한 접근 권한이 필요합니다.', 'error');
       return;
     }
 
-    await ensurePageContentScript(currentTabId);
+    await ensurePageContentScript(activeTabId);
 
-    const currentPort = getPortForTab(currentTabId);
-    if (translationState.state === 'translating' && currentPort) {
+    const currentPort = getPortForTab(activeTabId);
+    if (translationStateValue().state === 'translating' && currentPort) {
       currentPort.postMessage({
         type: PORT_MESSAGES.CANCEL_TRANSLATION,
         reason: 'user_restore'
       });
     }
 
-    await chrome.tabs.sendMessage(currentTabId, { action: ACTIONS.RESTORE_PAGE_ORIGINAL });
+    await chrome.tabs.sendMessage(activeTabId, { action: ACTIONS.RESTORE_PAGE_ORIGINAL });
     resetTranslateUI();
-    autoTranslateTriggeredByTab.delete(currentTabId);
+    autoTranslateTriggeredByTab.delete(activeTabId);
   } catch (error) {
-    logError('sidepanel', 'RESTORE_ERROR', '원본 복원 실패', { tabId: currentTabId }, error);
+    logError('sidepanel', 'RESTORE_ERROR', '원본 복원 실패', { tabId: activeTabId }, error);
     showToast('원본 복원 중 오류가 발생했습니다: ' + error.message, 'error');
   }
 }

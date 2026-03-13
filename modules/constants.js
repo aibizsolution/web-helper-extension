@@ -13,8 +13,13 @@ export const ACTIONS = {
   START_PRECISE_RETRANSLATION: 'START_PRECISE_RETRANSLATION',
   RESTORE_PAGE_ORIGINAL: 'RESTORE_PAGE_ORIGINAL',
   TRANSLATE_SELECTION: 'TRANSLATE_SELECTION',
+  COPY_SELECTION: 'COPY_SELECTION',
+  EXPLAIN_SELECTION: 'EXPLAIN_SELECTION',
   GET_PROGRESS_V2: 'GET_PROGRESS_V2',
   OPEN_QUICK_TRANSLATE_PANEL: 'OPEN_QUICK_TRANSLATE_PANEL',
+  FAST_TRANSLATE_INDEXED_TEXT: 'FAST_TRANSLATE_INDEXED_TEXT',
+  GET_TOTAL_CACHE_STATUS: 'getTotalCacheStatus',
+  FETCH_HTML_FOR_BOT_AUDIT: 'FETCH_HTML_FOR_BOT_AUDIT',
   TRANSLATE_FULL_PAGE: 'translateFullPage',
   RESTORE_ORIGINAL: 'restoreOriginal',
   GET_TRANSLATION_STATE: 'getTranslationState',
@@ -35,4 +40,30 @@ export const STORAGE_KEYS = {
   FEATURE_FLAGS: 'featureFlags',
   PENDING_QUICK_TRANSLATE: 'pendingQuickTranslate'
 };
+
+export const SELECTION_CONTEXT_MENU_ROOT_ID = 'wpt-selection-actions';
+
+export const SELECTION_ACTIONS = [
+  {
+    key: 'translate',
+    label: '번역',
+    tone: 'primary',
+    contextMenuId: 'wpt-selection-translate',
+    messageAction: ACTIONS.TRANSLATE_SELECTION
+  },
+  {
+    key: 'copy',
+    label: '복사',
+    tone: 'secondary',
+    contextMenuId: 'wpt-selection-copy',
+    messageAction: ACTIONS.COPY_SELECTION
+  },
+  {
+    key: 'explain',
+    label: '설명하기',
+    tone: 'secondary',
+    contextMenuId: 'wpt-selection-explain',
+    messageAction: ACTIONS.EXPLAIN_SELECTION
+  }
+];
 

@@ -502,6 +502,18 @@
       ].join('\n');
     }
 
+    function createSelectionExplanationPrompt(text) {
+      return [
+        '다음 선택 텍스트를 한국어로 이해하기 쉽게 설명해주세요.',
+        '- 단어 또는 짧은 표현이면 뜻, 뉘앙스, 자연스러운 해석을 간단히 설명하세요.',
+        '- 문장이나 문단이면 핵심 의미를 쉬운 한국어로 풀어주세요.',
+        '- 주어진 텍스트 범위를 벗어나 새 사실을 추측해서 덧붙이지 마세요.',
+        '- 2~4문장 정도로 간결하게 설명하고, 제목이나 마크다운 없이 설명만 반환하세요.',
+        '',
+        text
+      ].join('\n');
+    }
+
     function createContextPrompt(samples) {
       return [
         '다음은 웹페이지에서 발췌한 텍스트입니다.',
@@ -595,6 +607,18 @@
       });
     }
 
+    async function explainSelection(params) {
+      return await runPrompt({
+        provider: params.provider,
+        apiKey: params.apiKey,
+        model: params.model,
+        signal: params.signal,
+        temperature: 0.2,
+        prompt: createSelectionExplanationPrompt(params.text || ''),
+        purpose: 'explain-selection'
+      });
+    }
+
     async function detectContext(params) {
       return await runPrompt({
         provider: params.provider,
@@ -621,6 +645,7 @@
       translateSegments,
       translateTitle,
       translateSelection,
+      explainSelection,
       detectContext
     };
   } catch (_) {

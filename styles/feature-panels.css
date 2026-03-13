@@ -1,0 +1,2418 @@
+/* Feature Panels */
+    /* ===== 히스토리 탭 스타일 ===== */
+    .history-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius-lg);
+      padding: var(--space-lg);
+      margin-bottom: var(--space-md);
+      box-shadow: var(--shadow);
+      display: flex;
+      flex-direction: column;
+      gap: var(--space-md);
+    }
+
+    .history-header {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: var(--space-sm);
+    }
+
+    .history-title {
+      font-size: 16px;
+      font-weight: 700;
+      color: var(--text-primary);
+      margin: 0;
+    }
+
+    .history-subtitle {
+      font-size: 12px;
+      color: var(--text-secondary);
+      margin-top: 4px;
+      line-height: 1.5;
+    }
+
+    .history-clear-btn {
+      background: var(--bg-secondary);
+      color: var(--text-secondary);
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius-md);
+      padding: 8px 14px;
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+      white-space: nowrap;
+    }
+
+    .history-clear-btn:hover:not(:disabled) {
+      background: var(--btn-secondary-hover);
+      color: var(--text-primary);
+    }
+
+    .history-clear-btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    .history-clear-btn.confirm-mode {
+      background: rgba(239, 68, 68, 0.15);
+      color: var(--status-error);
+      border-color: var(--status-error);
+    }
+
+    .history-clear-btn.confirm-mode:hover:not(:disabled) {
+      background: rgba(239, 68, 68, 0.25);
+      color: #fca5a5;
+    }
+
+    .history-list {
+      display: flex;
+      flex-direction: column;
+      gap: var(--space-sm);
+    }
+
+    .history-item {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: var(--space-sm);
+      padding: var(--space-md);
+      border-radius: var(--radius-md);
+      border: 1px solid var(--border-color);
+      background: var(--bg-secondary);
+      cursor: pointer;
+      transition: background 0.2s, border-color 0.2s;
+      outline: none;
+    }
+
+    .history-item:hover {
+      background: rgba(42, 108, 240, 0.12);
+      border-color: rgba(42, 108, 240, 0.4);
+    }
+
+    .history-item:focus-visible {
+      outline: 2px solid rgba(42, 108, 240, 0.6);
+      outline-offset: 2px;
+    }
+
+    .history-item-body {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      overflow: hidden;
+    }
+
+    .history-item-title {
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--text-primary);
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .history-item-subtitle {
+      font-size: 12px;
+      color: var(--text-secondary);
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .history-item-meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: var(--space-xs);
+      font-size: 11px;
+      color: var(--text-secondary);
+    }
+
+    .history-item-meta span {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+    }
+
+    .history-item-delete {
+      width: 32px;
+      height: 32px;
+      border-radius: 9999px;
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid var(--border-color);
+      color: var(--text-secondary);
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.2s;
+      flex-shrink: 0;
+    }
+
+    .history-item-delete:hover {
+      background: rgba(239, 68, 68, 0.2);
+      border-color: rgba(239, 68, 68, 0.4);
+      color: #fca5a5;
+    }
+
+    .history-empty {
+      padding: var(--space-2xl) var(--space-lg);
+      border-radius: var(--radius-md);
+      border: 1px dashed rgba(255, 255, 255, 0.12);
+      background: rgba(18, 20, 24, 0.8);
+      text-align: center;
+      color: var(--text-secondary);
+      display: none;
+      flex-direction: column;
+      gap: var(--space-sm);
+      align-items: center;
+    }
+
+    .history-empty-icon {
+      font-size: 36px;
+    }
+
+    .history-empty p {
+      font-size: 13px;
+      line-height: 1.6;
+    }
+
+
+    /* ===== 검색 탭 스타일 ===== */
+    .search-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius-lg);
+      padding: var(--space-lg);
+      box-shadow: var(--shadow);
+    }
+
+    .search-header {
+      margin-bottom: var(--space-xl);
+    }
+
+    .search-title {
+      font-size: 16px;
+      font-weight: 700;
+      color: var(--text-primary);
+      margin-bottom: 6px;
+      margin-top: 0;
+    }
+
+    .search-subtitle {
+      font-size: 13px;
+      color: var(--text-secondary);
+      line-height: 1.5;
+      margin: 0;
+    }
+
+    /* 검색 입력 영역 */
+    .search-input-group {
+      margin-bottom: var(--space-xl);
+    }
+
+    .search-input-group label {
+      display: block;
+      margin-bottom: var(--space-xs);
+      font-weight: 500;
+      font-size: 13px;
+      color: var(--text-primary);
+    }
+
+    .search-input-group textarea {
+      width: 100%;
+      padding: var(--space-sm) var(--space-md);
+      background: var(--bg-primary);
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius-md);
+      color: var(--text-primary);
+      font-size: 13px;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      resize: vertical;
+      transition: all 0.2s;
+      margin-bottom: var(--space-sm);
+    }
+
+    .search-input-group textarea:focus {
+      outline: none;
+      border-color: var(--status-active);
+      box-shadow: 0 0 0 3px rgba(42, 108, 240, 0.1);
+    }
+
+    /* 로딩 상태 */
+    .search-loading {
+      display: flex;
+      align-items: center;
+      gap: var(--space-sm);
+      padding: var(--space-sm) var(--space-md);
+      background: var(--bg-primary);
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius-md);
+      color: var(--text-secondary);
+      font-size: 13px;
+      margin-top: var(--space-sm);
+    }
+
+    .search-loading.show {
+      display: flex;
+    }
+
+    .spinner {
+      width: 16px;
+      height: 16px;
+      border: 2px solid rgba(42, 108, 240, 0.2);
+      border-top-color: var(--status-active);
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    /* 추천 검색문 리스트 */
+    .search-recommendations {
+      display: flex;
+      flex-direction: column;
+      gap: var(--space-sm);
+    }
+
+    .search-item {
+      display: flex;
+      flex-direction: column;
+      gap: var(--space-sm);
+      padding: var(--space-md);
+      background: var(--bg-secondary);
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius-md);
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .search-item:hover {
+      background: rgba(42, 108, 240, 0.12);
+      border-color: rgba(42, 108, 240, 0.4);
+    }
+
+    .search-item:focus-visible {
+      outline: 2px solid rgba(42, 108, 240, 0.6);
+      outline-offset: 2px;
+    }
+
+    .search-item-text {
+      font-size: 13px;
+      color: var(--text-primary);
+      font-weight: 500;
+      line-height: 1.5;
+      word-break: break-word;
+    }
+
+    .search-item-engines {
+      display: flex;
+      align-items: center;
+      gap: var(--space-xs);
+      flex-wrap: wrap;
+    }
+
+    .search-engine-btn {
+      width: 36px;
+      height: 36px;
+      border-radius: 8px;
+      background: var(--bg-primary);
+      border: 1px solid var(--border-color);
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.2s;
+      padding: 0;
+    }
+
+    .search-engine-btn img {
+      width: 20px;
+      height: 20px;
+      object-fit: contain;
+    }
+
+    .search-engine-btn svg {
+      width: 20px;
+      height: 20px;
+      filter: drop-shadow(0 0 2px rgba(255, 255, 255, 0.3));
+    }
+
+    .search-engine-btn:hover {
+      background: rgba(42, 108, 240, 0.15);
+      border-color: rgba(42, 108, 240, 0.6);
+      transform: scale(1.05);
+    }
+
+    .search-engine-btn:active {
+      transform: scale(0.95);
+    }
+
+    .search-engine-btn.all {
+      background: rgba(42, 108, 240, 0.15);
+      color: var(--status-active);
+      border-color: var(--status-active);
+      font-size: 12px;
+    }
+
+    .search-engine-btn.all:hover {
+      background: rgba(42, 108, 240, 0.25);
+    }
+
+    /* 빈 상태 */
+    .search-empty {
+      padding: var(--space-2xl) var(--space-lg);
+      border-radius: var(--radius-md);
+      border: 1px dashed rgba(255, 255, 255, 0.12);
+      background: rgba(18, 20, 24, 0.8);
+      text-align: center;
+      color: var(--text-secondary);
+      display: flex;
+      flex-direction: column;
+      gap: var(--space-sm);
+      align-items: center;
+      margin-top: var(--space-xl);
+    }
+
+    .search-empty.hidden {
+      display: none;
+    }
+
+    .search-empty-icon {
+      font-size: 36px;
+    }
+
+    .search-empty p {
+      font-size: 13px;
+      line-height: 1.6;
+      margin: 0;
+    }
+
+    /* ===== 텍스트 번역 탭 스타일 ===== */
+    .quick-translate-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius-lg);
+      padding: var(--space-lg);
+      margin-bottom: var(--space-md);
+      box-shadow: var(--shadow);
+    }
+
+    .quick-translate-header {
+      margin-bottom: var(--space-lg);
+    }
+
+    .quick-translate-title {
+      font-size: 16px;
+      font-weight: 700;
+      color: var(--text-primary);
+      margin-bottom: 6px;
+      margin-top: 0;
+    }
+
+    .quick-translate-subtitle {
+      font-size: 13px;
+      color: var(--text-secondary);
+      line-height: 1.5;
+      margin: 0;
+    }
+
+    .quick-input-group {
+      margin-bottom: var(--space-md);
+    }
+
+    .quick-input-group label {
+      display: block;
+      margin-bottom: var(--space-xs);
+      font-weight: 500;
+      font-size: 13px;
+      color: var(--text-primary);
+    }
+
+    .quick-input-group textarea {
+      width: 100%;
+      min-height: 120px;
+      padding: var(--space-sm);
+      background: var(--bg-primary);
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius-md);
+      color: var(--text-primary);
+      font-size: 13px;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      resize: vertical;
+      transition: all 0.2s;
+      line-height: 1.6;
+    }
+
+    .quick-input-group textarea:focus {
+      outline: none;
+      border-color: var(--status-active);
+      box-shadow: 0 0 0 3px rgba(42, 108, 240, 0.1);
+    }
+
+    .quick-input-help {
+      font-size: 11px;
+      color: var(--text-secondary);
+      margin-top: 6px;
+    }
+
+    .quick-loading {
+      display: flex;
+      align-items: center;
+      gap: var(--space-sm);
+      padding: var(--space-lg);
+      background: var(--bg-primary);
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius-md);
+      color: var(--text-secondary);
+      font-size: 13px;
+      justify-content: center;
+    }
+
+    .quick-error {
+      padding: var(--space-lg);
+      background: rgba(239, 68, 68, 0.1);
+      border: 1px solid rgba(239, 68, 68, 0.3);
+      border-radius: var(--radius-md);
+      color: var(--status-error);
+      font-size: 13px;
+      text-align: center;
+    }
+
+    .quick-result-card {
+      background: var(--bg-primary);
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius-md);
+      padding: var(--space-md);
+      margin-bottom: var(--space-lg);
+    }
+
+    .quick-result-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: var(--space-sm);
+      padding-bottom: var(--space-sm);
+      border-bottom: 1px solid var(--border-color);
+    }
+
+    .quick-result-label {
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--text-secondary);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .quick-toggle-original {
+      font-size: 12px;
+      padding: 6px 12px;
+      background: var(--btn-secondary-bg);
+      color: var(--text-primary);
+      border: 1px solid var(--border-color);
+      border-radius: 6px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .quick-toggle-original:hover {
+      background: var(--btn-secondary-hover);
+    }
+
+    .quick-result-text {
+      font-size: 14px;
+      color: var(--text-primary);
+      line-height: 1.8;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+
+    /* 히스토리 섹션 */
+    .quick-history-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-top: var(--space-2xl);
+      margin-bottom: var(--space-md);
+    }
+
+    .quick-history-title {
+      font-size: 15px;
+      font-weight: 600;
+      color: var(--text-primary);
+      margin: 0;
+    }
+
+    .quick-history-list {
+      display: flex;
+      flex-direction: column;
+      gap: var(--space-md);
+    }
+
+    .quick-history-item {
+      display: flex;
+      align-items: flex-start;
+      gap: var(--space-sm);
+      padding: var(--space-md);
+      background: var(--bg-secondary);
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius-md);
+      transition: all 0.2s;
+    }
+
+    .quick-history-item:hover {
+      background: rgba(42, 108, 240, 0.08);
+      border-color: rgba(42, 108, 240, 0.3);
+    }
+
+    .quick-history-body {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: var(--space-xs);
+      overflow: hidden;
+    }
+
+    .quick-history-translation {
+      font-size: 14px;
+      color: var(--text-primary);
+      line-height: 1.6;
+      word-break: break-word;
+      white-space: pre-wrap;
+    }
+
+    .quick-history-original {
+      font-size: 13px;
+      color: var(--text-secondary);
+      line-height: 1.6;
+      word-break: break-word;
+      padding: var(--space-sm);
+      background: var(--bg-primary);
+      border-radius: 6px;
+      border: 1px solid var(--border-color);
+      white-space: pre-wrap;
+    }
+
+    .quick-history-original.collapsed {
+      display: none;
+    }
+
+    .quick-history-meta {
+      display: flex;
+      align-items: center;
+      gap: var(--space-sm);
+      font-size: 11px;
+      color: var(--text-secondary);
+    }
+
+    .quick-history-toggle {
+      font-size: 11px;
+      padding: 4px 8px;
+      background: transparent;
+      color: var(--status-active);
+      border: 1px solid var(--status-active);
+      border-radius: 4px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .quick-history-toggle:hover {
+      background: rgba(42, 108, 240, 0.15);
+    }
+
+    .quick-history-delete {
+      width: 32px;
+      height: 32px;
+      border-radius: 9999px;
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid var(--border-color);
+      color: var(--text-secondary);
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.2s;
+      flex-shrink: 0;
+      padding: 0;
+    }
+
+    .quick-history-delete:hover {
+      background: rgba(239, 68, 68, 0.2);
+      border-color: rgba(239, 68, 68, 0.4);
+      color: #fca5a5;
+    }
+
+    .quick-history-empty {
+      padding: var(--space-2xl) var(--space-lg);
+      border-radius: var(--radius-md);
+      border: 1px dashed rgba(255, 255, 255, 0.12);
+      background: rgba(18, 20, 24, 0.8);
+      text-align: center;
+      color: var(--text-secondary);
+      display: none;
+      flex-direction: column;
+      gap: var(--space-sm);
+      align-items: center;
+    }
+
+    .quick-history-empty-icon {
+      font-size: 36px;
+    }
+
+    .quick-history-empty p {
+      font-size: 13px;
+      line-height: 1.6;
+      margin: 0;
+    }
+
+    /* ===== 반복관리 탭 스타일 ===== */
+    .recurring-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius-lg);
+      padding: var(--space-lg);
+      box-shadow: var(--shadow);
+      display: flex;
+      flex-direction: column;
+      gap: var(--space-lg);
+    }
+
+    .recurring-header {
+      margin-bottom: var(--space-sm);
+    }
+
+    .recurring-title {
+      font-size: 16px;
+      font-weight: 700;
+      color: var(--text-primary);
+      margin-bottom: 6px;
+      margin-top: 0;
+    }
+
+    .recurring-subtitle {
+      font-size: 13px;
+      color: var(--text-secondary);
+      line-height: 1.5;
+      margin: 0;
+    }
+
+    /* 카테고리 섹션 */
+    .recurring-category-section label {
+      display: block;
+      margin-bottom: var(--space-xs);
+      font-weight: 500;
+      font-size: 13px;
+      color: var(--text-primary);
+    }
+
+    .recurring-category-controls {
+      display: flex;
+      gap: var(--space-xs);
+      align-items: center;
+      flex-wrap: wrap;
+    }
+
+    .recurring-category-select {
+      flex: 1;
+      padding: 10px 14px;
+      background: var(--bg-primary);
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius-md);
+      color: var(--text-primary);
+      font-size: 13px;
+      transition: all 0.2s;
+      cursor: pointer;
+    }
+
+    .recurring-category-select:focus {
+      outline: none;
+      border-color: var(--status-active);
+      box-shadow: 0 0 0 3px rgba(42, 108, 240, 0.1);
+    }
+
+    /* 액션 버튼 */
+    .recurring-actions {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: var(--space-xs);
+    }
+
+    .recurring-actions .btn {
+      margin: 0;
+      font-size: 12px;
+      padding: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    /* 할일 목록 */
+    .recurring-task-list-container {
+      min-height: 200px;
+      max-height: 400px;
+      overflow-y: auto;
+      scrollbar-width: thin;
+      scrollbar-color: #2A2F38 #0F1115;
+    }
+
+    .recurring-task-list-container::-webkit-scrollbar {
+      width: 8px;
+    }
+
+    .recurring-task-list-container::-webkit-scrollbar-track {
+      background: #0F1115;
+      border-radius: 4px;
+    }
+
+    .recurring-task-list-container::-webkit-scrollbar-thumb {
+      background: #2A2F38;
+      border-radius: 4px;
+    }
+
+    .recurring-task-list {
+      display: flex;
+      flex-direction: column;
+      gap: 0;
+    }
+
+    .recurring-task-item {
+      display: grid;
+      grid-template-columns: auto 20px 1fr auto;
+      align-items: center;
+      gap: var(--space-sm);
+      padding: var(--space-sm) var(--space-md);
+      background: var(--bg-secondary);
+      border-bottom: 1px solid var(--border-color);
+      transition: all 0.2s;
+      cursor: move;
+      counter-increment: task-counter;
+    }
+
+    .recurring-task-item:first-child {
+      border-top: 1px solid var(--border-color);
+    }
+
+    .recurring-task-item:hover {
+      background: rgba(42, 108, 240, 0.08);
+    }
+
+    .recurring-task-item.dragging {
+      opacity: 0.5;
+    }
+
+    .recurring-task-item.drag-over {
+      border-color: var(--status-active);
+      background: rgba(42, 108, 240, 0.15);
+    }
+
+    .recurring-task-list-container {
+      counter-reset: task-counter;
+    }
+
+    .task-order {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text-secondary);
+      width: 24px;
+      text-align: right;
+      flex-shrink: 0;
+    }
+
+    .task-order::after {
+      content: counter(task-counter) ".";
+    }
+
+    .task-checkbox {
+      width: 20px;
+      height: 20px;
+      cursor: pointer;
+      flex-shrink: 0;
+      accent-color: var(--status-active);
+    }
+
+    .task-text {
+      flex: 1;
+      font-size: 14px;
+      color: var(--text-primary);
+      cursor: pointer;
+      word-break: break-word;
+      line-height: 1.5;
+      padding: 4px 0;
+    }
+
+    .task-text:hover {
+      color: var(--status-active);
+    }
+
+    /* 빈 상태 */
+    .recurring-empty {
+      padding: var(--space-2xl) var(--space-lg);
+      border-radius: var(--radius-md);
+      border: 1px dashed rgba(255, 255, 255, 0.12);
+      background: rgba(18, 20, 24, 0.8);
+      text-align: center;
+      color: var(--text-secondary);
+      display: none;
+      flex-direction: column;
+      gap: var(--space-sm);
+      align-items: center;
+    }
+
+    .recurring-empty-icon {
+      font-size: 36px;
+    }
+
+    .recurring-empty p {
+      font-size: 13px;
+      line-height: 1.6;
+      margin: 0;
+    }
+
+    /* 할일 추가 */
+    .recurring-add-task {
+      display: flex;
+      gap: var(--space-xs);
+      align-items: center;
+    }
+
+    .recurring-add-task input {
+      flex: 1;
+      padding: 10px 14px;
+      background: var(--bg-primary);
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius-md);
+      color: var(--text-primary);
+      font-size: 13px;
+      transition: all 0.2s;
+    }
+
+    .recurring-add-task input:focus {
+      outline: none;
+      border-color: var(--status-active);
+      box-shadow: 0 0 0 3px rgba(42, 108, 240, 0.1);
+    }
+
+    /* 카테고리 인라인 폼 */
+    .recurring-inline-form {
+      display: flex;
+      gap: var(--space-xs);
+      align-items: center;
+      margin-top: var(--space-xs);
+      padding: var(--space-sm);
+      background: var(--bg-primary);
+      border: 1px solid var(--status-active);
+      border-radius: var(--radius-md);
+      animation: slideDown 0.2s ease-out;
+    }
+
+    @keyframes slideDown {
+      from {
+        opacity: 0;
+        transform: translateY(-8px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    .recurring-inline-form input {
+      flex: 1;
+      padding: 10px 14px;
+      background: var(--bg-secondary);
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius-md);
+      color: var(--text-primary);
+      font-size: 13px;
+      transition: all 0.2s;
+    }
+
+    .recurring-inline-form input:focus {
+      outline: none;
+      border-color: var(--status-active);
+      box-shadow: 0 0 0 3px rgba(42, 108, 240, 0.1);
+    }
+
+    .recurring-inline-form .icon-btn {
+      background: rgba(42, 108, 240, 0.15);
+      border-color: var(--status-active);
+      color: var(--status-active);
+    }
+
+    .recurring-inline-form .icon-btn:hover {
+      background: rgba(42, 108, 240, 0.25);
+      border-color: var(--status-active);
+      color: var(--text-primary);
+    }
+
+    .recurring-inline-form .icon-btn:last-child {
+      background: rgba(239, 68, 68, 0.15);
+      border-color: var(--status-error);
+      color: var(--status-error);
+    }
+
+    .recurring-inline-form .icon-btn:last-child:hover {
+      background: rgba(239, 68, 68, 0.25);
+      border-color: var(--status-error);
+      color: #fca5a5;
+    }
+
+            .geo-tab-shell {
+              flex-direction: column;
+              gap: 16px;
+            }
+
+            .tab-content.active.geo-tab-shell {
+              display: flex;
+            }
+
+            .geo-panel-description {
+              color: var(--text-secondary);
+              font-size: 13px;
+              line-height: 1.6;
+              margin: 0 0 10px;
+            }
+
+            .geo-run-btn {
+              margin: 2px 0 14px;
+            }
+
+            .geo-result-stack,
+            .geo-result-list {
+              display: flex;
+              flex-direction: column;
+              gap: 16px;
+            }
+
+            .geo-panel-card {
+              background: rgba(9, 12, 17, 0.72);
+              border: 1px solid rgba(255, 255, 255, 0.08);
+              border-radius: 16px;
+              padding: 14px;
+              box-shadow: var(--shadow);
+            }
+
+            .geo-panel-card-title {
+              font-size: 14px;
+              font-weight: 700;
+              color: var(--text-primary);
+              margin-bottom: 12px;
+            }
+
+            .geo-scores {
+              display: grid;
+              grid-template-columns: repeat(4, 1fr);
+              gap: 12px;
+              margin-bottom: 16px;
+            }
+
+            .geo-score-item {
+              background: var(--bg-secondary);
+              border: 1px solid var(--border-color);
+              border-radius: var(--radius-md);
+              padding: 12px;
+              text-align: center;
+              /* 모든 카드 같은 높이 */
+              display: flex;
+              flex-direction: column;
+              justify-content: center;
+              align-items: center;
+              min-height: 108px;
+            }
+
+            .geo-score-item.total {
+              /* 총점도 4개 중 1개로 같은 크기 */
+              grid-column: auto;
+              background: rgba(42, 108, 240, 0.1);
+              border-color: rgba(42, 108, 240, 0.3);
+            }
+
+            .geo-score-item.seo { border-color: rgba(16, 185, 129, 0.3); }
+            .geo-score-item.aeo { border-color: rgba(245, 158, 11, 0.3); }
+            .geo-score-item.geo { border-color: rgba(42, 108, 240, 0.3); }
+
+            .score-value {
+              font-size: 20px;
+              font-weight: 700;
+              color: var(--text-primary);
+              margin-bottom: 4px;
+            }
+
+            .geo-score-item.seo .score-value { color: #10b981; }
+            .geo-score-item.aeo .score-value { color: #f59e0b; }
+            .geo-score-item.geo .score-value { color: #2A6CF0; }
+            .geo-score-item.total .score-value { color: var(--status-active); }
+
+            .score-label {
+              font-size: 12px;
+              color: var(--text-secondary);
+              line-height: 1.35;
+              white-space: normal;
+              word-break: keep-all;
+            }
+
+            .score-label-meta {
+              display: block;
+              margin-top: 2px;
+              font-size: 11px;
+              opacity: 0.9;
+            }
+
+            .geo-score-summary {
+              display: flex;
+              gap: 16px;
+              font-size: 13px;
+              color: var(--text-secondary);
+            }
+
+            .geo-category {
+              margin-bottom: 16px;
+            }
+
+            .geo-category-title {
+              font-size: 14px;
+              font-weight: 600;
+              color: var(--text-primary);
+              margin-bottom: 12px;
+              padding: 8px 0;
+              border-bottom: 1px solid var(--border-color);
+            }
+
+            .geo-items {
+              display: flex;
+              flex-direction: column;
+              gap: 8px;
+            }
+
+            .geo-item {
+              padding: 12px;
+              background: var(--bg-secondary);
+              border: 1px solid var(--border-color);
+              border-radius: var(--radius-md);
+              font-size: 13px;
+            }
+
+            .geo-item.passed {
+              background: rgba(16, 185, 129, 0.05);
+              border-color: rgba(16, 185, 129, 0.2);
+            }
+
+            .geo-item.failed {
+              background: rgba(239, 68, 68, 0.05);
+              border-color: rgba(239, 68, 68, 0.2);
+            }
+
+            .geo-item-header {
+              display: flex;
+              align-items: center;
+              gap: 8px;
+              margin-bottom: 4px;
+            }
+
+            .geo-item-icon {
+              font-size: 14px;
+            }
+
+            .geo-item-title {
+              flex: 1;
+              color: var(--text-primary);
+              font-weight: 500;
+            }
+
+            .geo-item-weight {
+              font-size: 11px;
+              color: var(--text-secondary);
+              background: rgba(255, 255, 255, 0.05);
+              padding: 2px 6px;
+              border-radius: 4px;
+            }
+
+            .geo-item-description {
+              font-size: 12px;
+              color: var(--text-secondary);
+              margin-top: 8px;
+              padding: 8px;
+              background: rgba(255, 255, 255, 0.02);
+              border-left: 3px solid rgba(42, 108, 240, 0.3);
+              border-radius: 4px;
+              line-height: 1.5;
+            }
+
+            .geo-item-description > div {
+              margin-bottom: 4px;
+            }
+
+            .geo-item-description > div:last-child {
+              margin-bottom: 0;
+            }
+
+            .geo-item-bullet {
+              margin-left: 12px;
+              color: var(--text-secondary);
+            }
+
+            .geo-item-bullet::before {
+              content: "• ";
+              color: var(--status-active);
+              font-weight: bold;
+              margin-right: 4px;
+            }
+
+            .geo-item-action {
+              color: var(--status-warning);
+              font-weight: 500;
+              margin-top: 4px;
+            }
+
+            .geo-item-action::before {
+              content: "→ ";
+              margin-right: 4px;
+            }
+
+            .geo-item-hint {
+              font-size: 12px;
+              color: var(--text-secondary);
+              margin-top: 8px;
+              padding: 8px;
+              background: rgba(239, 68, 68, 0.05);
+              border-left: 3px solid var(--status-error);
+              border-radius: 4px;
+              line-height: 1.5;
+            }
+
+            .geo-improvement {
+              background: var(--bg-card);
+              border: 1px solid var(--border-color);
+              border-radius: var(--radius-lg);
+              padding: var(--space-lg);
+              margin-bottom: var(--space-md);
+            }
+
+            .geo-improvement h3 {
+              font-size: 14px;
+              font-weight: 600;
+              color: var(--text-primary);
+              margin-bottom: 12px;
+            }
+
+            .geo-improvement-content {
+              font-size: 13px;
+              color: var(--text-secondary);
+              line-height: 1.6;
+            }
+
+            .geo-improvement-content p {
+              margin-bottom: 8px;
+            }
+
+            .geo-improvement-content strong {
+              color: var(--text-primary);
+              font-weight: 600;
+            }
+
+            .geo-improvement-content em {
+              color: var(--text-secondary);
+              font-style: italic;
+            }
+
+            /* h2: 메인 섹션 제목 */
+            .geo-improvement-h2 {
+              font-size: 16px;
+              font-weight: 800;
+              color: var(--text-primary);
+              margin-top: 20px;
+              margin-bottom: 16px;
+              padding-bottom: 12px;
+              border-bottom: 3px solid var(--status-active);
+              letter-spacing: 0.5px;
+            }
+
+            .geo-improvement-h2:first-child {
+              margin-top: 0;
+            }
+
+            /* h3: 항목 제목 (1. 2. 3.) */
+            .geo-improvement-h3 {
+              font-size: 15px;
+              font-weight: 700;
+              color: var(--text-primary);
+              margin-top: 16px;
+              margin-bottom: 12px;
+              padding-left: 12px;
+              border-left: 4px solid var(--status-active);
+              background: rgba(42, 108, 240, 0.05);
+              padding-top: 8px;
+              padding-bottom: 8px;
+              padding-right: 8px;
+              border-radius: 0 4px 4px 0;
+            }
+
+            /* h4: 추가 소제목 */
+            .geo-improvement-h4 {
+              font-size: 13px;
+              font-weight: 700;
+              color: var(--status-active);
+              margin-top: 12px;
+              margin-bottom: 8px;
+              padding-left: 8px;
+              border-left: 2px solid rgba(42, 108, 240, 0.5);
+            }
+
+            /* 소제목 강화 (구체적인 실행 방법:, 예상 효과: 등) */
+            .geo-section-title {
+              display: block;
+              font-size: 13px;
+              font-weight: 700;
+              color: var(--status-active);
+              margin-top: 12px;
+              margin-bottom: 8px;
+              padding-bottom: 6px;
+              border-bottom: 2px solid rgba(42, 108, 240, 0.3);
+            }
+
+            .geo-improvement-content > p:has(+ .geo-ordered-list),
+            .geo-improvement-content > p:has(+ .geo-unordered-list) {
+              margin-bottom: 4px;
+            }
+
+            /* 번호 목록 스타일링 */
+            .geo-ordered-list {
+              list-style: decimal;
+              list-style-position: inside;
+              margin: 8px 0 12px 0;
+              padding-left: 12px;
+            }
+
+            .geo-ordered-list li {
+              margin-bottom: 8px;
+              color: var(--text-secondary);
+              line-height: 1.6;
+              padding-left: 4px;
+            }
+
+            .geo-ordered-list li:last-child {
+              margin-bottom: 0;
+            }
+
+            .geo-ordered-list li::marker {
+              color: var(--status-active);
+              font-weight: 700;
+            }
+
+            /* 불릿 목록 스타일링 */
+            .geo-unordered-list {
+              list-style: none;
+              margin: 8px 0 12px 0;
+              padding-left: 16px;
+            }
+
+            .geo-unordered-list li {
+              margin-bottom: 8px;
+              color: var(--text-secondary);
+              line-height: 1.6;
+              position: relative;
+              padding-left: 8px;
+            }
+
+            .geo-unordered-list li:last-child {
+              margin-bottom: 0;
+            }
+
+            .geo-unordered-list li::before {
+              content: "→";
+              position: absolute;
+              left: -12px;
+              color: var(--status-warning);
+              font-weight: bold;
+            }
+
+            /* 인라인 코드 스타일 */
+            .geo-inline-code {
+              background: rgba(42, 108, 240, 0.15);
+              color: var(--status-active);
+              font-family: 'Consolas', 'Monaco', monospace;
+              font-size: 12px;
+              padding: 2px 6px;
+              border-radius: 4px;
+              font-weight: 500;
+            }
+
+            /* 코드블록 강화 */
+            .geo-improvement-content pre {
+              background: var(--bg-primary);
+              border: 1px solid var(--border-color);
+              border-left: 3px solid var(--status-active);
+              border-radius: var(--radius-md);
+              padding: 12px;
+              overflow-x: auto;
+              margin: 12px 0;
+            }
+
+            .geo-improvement-content code {
+              font-family: 'Consolas', 'Monaco', monospace;
+              font-size: 12px;
+              color: var(--text-secondary);
+              line-height: 1.5;
+              white-space: pre-wrap;
+              word-break: break-word;
+            }
+
+            /* GEO 개선 의견 (마크다운 기반) */
+            .geo-improvement-content {
+              font-size: 13px;
+              color: var(--text-secondary);
+              line-height: 1.7;
+            }
+
+            .geo-improvement-content h3 {
+              font-size: 15px;
+              font-weight: 700;
+              color: var(--status-active);
+              margin: 16px 0 12px 0;
+              padding-left: 12px;
+              border-left: 3px solid var(--status-active);
+            }
+
+            .geo-improvement-content h3:first-child {
+              margin-top: 0;
+            }
+
+            .geo-improvement-content p {
+              margin: 8px 0;
+              color: var(--text-secondary);
+            }
+
+            .geo-improvement-content strong {
+              color: var(--text-primary);
+              font-weight: 600;
+            }
+
+            .geo-improvement-content em {
+              color: var(--text-secondary);
+              font-style: italic;
+            }
+
+            .geo-improvement-list {
+              list-style: none;
+              padding-left: 16px;
+              margin: 8px 0 12px 0;
+            }
+
+            .geo-improvement-list li {
+              margin-bottom: 8px;
+              color: var(--text-secondary);
+              position: relative;
+              padding-left: 8px;
+            }
+
+            .geo-improvement-list li:before {
+              content: "→";
+              position: absolute;
+              left: -12px;
+              color: var(--status-warning);
+              font-weight: bold;
+            }
+
+            .geo-improvement-list li:last-child {
+              margin-bottom: 0;
+            }
+
+            /* === Dual Audit 스타일 (봇 vs 브라우저) === */
+
+            /* 차이점 경고 */
+            .geo-diff-warning {
+              background: rgba(239, 68, 68, 0.1);
+              border: 1px solid rgba(239, 68, 68, 0.3);
+              border-left: 4px solid var(--status-error);
+              padding: 12px 16px;
+              border-radius: var(--radius-md);
+              color: var(--text-primary);
+              font-size: 13px;
+              margin-bottom: 16px;
+            }
+
+            .geo-diff-success {
+              background: rgba(16, 185, 129, 0.1);
+              border: 1px solid rgba(16, 185, 129, 0.3);
+              border-left: 4px solid var(--status-success);
+              padding: 12px 16px;
+              border-radius: var(--radius-md);
+              color: var(--text-primary);
+              font-size: 13px;
+              margin-bottom: 16px;
+            }
+
+            /* 점수 비교 섹션 */
+            .geo-score-comparison {
+              margin-bottom: 0;
+            }
+
+            .geo-score-comparison h3 {
+              font-size: 14px;
+              font-weight: 600;
+              color: var(--text-primary);
+              margin-bottom: 16px;
+            }
+
+            .geo-score-row {
+              display: grid;
+              grid-template-columns: 1fr 1fr;
+              gap: 16px;
+              margin-bottom: 12px;
+            }
+
+            .geo-score-col {
+              background: var(--bg-primary);
+              border: 1px solid var(--border-color);
+              border-radius: var(--radius-md);
+              padding: 16px;
+              text-align: center;
+            }
+
+            .geo-score-label {
+              font-size: 13px;
+              color: var(--text-secondary);
+              margin-bottom: 8px;
+            }
+
+            .geo-score-value {
+              font-size: 28px;
+              font-weight: 700;
+              color: var(--status-active);
+              margin-bottom: 8px;
+            }
+
+            .geo-score-value.low {
+              color: var(--status-error);
+            }
+
+            .geo-score-detail {
+              font-size: 12px;
+              color: var(--text-secondary);
+            }
+
+            .geo-score-gap {
+              background: rgba(239, 68, 68, 0.05);
+              border: 1px solid rgba(239, 68, 68, 0.2);
+              border-radius: var(--radius-md);
+              padding: 12px;
+              display: flex;
+              align-items: center;
+              gap: 8px;
+              font-size: 13px;
+            }
+
+            .geo-gap-icon {
+              font-size: 16px;
+            }
+
+            .geo-gap-text {
+              color: var(--status-error);
+              font-weight: 600;
+            }
+
+            .geo-gap-hint {
+              color: var(--text-secondary);
+              flex: 1;
+            }
+
+            /* 봇/브라우저 섹션 */
+            .geo-audit-section {
+              margin-bottom: 32px;
+            }
+
+            .geo-audit-section h3 {
+              font-size: 15px;
+              font-weight: 700;
+              color: var(--text-primary);
+              margin-bottom: 16px;
+              padding-bottom: 12px;
+              border-bottom: 2px solid var(--border-color);
+            }
+
+            .geo-audit-section.bot-section h3 {
+              border-bottom-color: rgba(245, 158, 11, 0.4);
+            }
+
+            .geo-audit-section.client-section h3 {
+              border-bottom-color: rgba(16, 185, 129, 0.4);
+            }
+
+            .geo-audit-section h4.geo-category-title {
+              font-size: 13px;
+              padding-bottom: 8px;
+              margin-top: 16px;
+            }
+
+            /* 차이점 강조 */
+            .geo-item-diff {
+              border: 2px solid var(--status-error) !important;
+              box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.1);
+            }
+
+            .geo-diff-badge {
+              background: var(--status-error);
+              color: white;
+              font-size: 11px;
+              font-weight: 600;
+              padding: 2px 8px;
+              border-radius: 12px;
+              margin-left: auto;
+              margin-right: 4px;
+            }
+
+            /* Dual Audit - 항목별 나란히 비교 */
+            .geo-dual-comparison {
+              margin-top: 24px;
+            }
+
+            .geo-dual-item {
+              background: var(--bg-secondary);
+              border: 1px solid var(--border-color);
+              border-radius: var(--radius-md);
+              padding: 16px;
+              margin-bottom: 12px;
+            }
+
+            .geo-dual-header {
+              display: flex;
+              align-items: center;
+              gap: 12px;
+              margin-bottom: 16px;
+              padding-bottom: 12px;
+              border-bottom: 1px solid var(--border-color);
+            }
+
+            .geo-dual-header .geo-item-title {
+              font-size: 14px;
+              font-weight: 600;
+              color: var(--text-primary);
+              flex: 1;
+            }
+
+            .geo-dual-header .geo-item-weight {
+              font-size: 12px;
+              font-weight: 600;
+              color: var(--status-active);
+              background: rgba(42, 108, 240, 0.1);
+              padding: 4px 8px;
+              border-radius: 12px;
+            }
+
+            .geo-dual-results {
+              display: grid;
+              grid-template-columns: 1fr 1fr;
+              gap: 16px;
+            }
+
+            .geo-dual-col {
+              background: var(--bg-primary);
+              border: 1px solid var(--border-color);
+              border-radius: var(--radius-md);
+              padding: 12px;
+            }
+
+            .geo-dual-label {
+              font-size: 12px;
+              font-weight: 600;
+              color: var(--text-secondary);
+              margin-bottom: 8px;
+            }
+
+            .geo-dual-status {
+              font-size: 13px;
+              font-weight: 600;
+              margin-bottom: 8px;
+            }
+
+            .geo-dual-status.passed {
+              color: var(--status-success);
+            }
+
+            .geo-dual-status.failed {
+              color: var(--status-error);
+            }
+
+            .geo-dual-col .geo-item-hint {
+              font-size: 12px;
+              color: var(--text-secondary);
+              margin-top: 8px;
+              padding: 8px;
+              background: rgba(245, 158, 11, 0.05);
+              border-left: 3px solid rgba(245, 158, 11, 0.4);
+              border-radius: 4px;
+            }
+
+            /* 공통 힌트 (둘 다 실패 시) */
+            .geo-item-hint-common {
+              font-size: 12px;
+              color: var(--text-secondary);
+              margin-top: 12px;
+              padding: 8px;
+              background: rgba(245, 158, 11, 0.05);
+              border-left: 3px solid rgba(245, 158, 11, 0.4);
+              border-radius: 4px;
+            }
+
+            /* 교육 툴팁 - 물음표 아이콘 */
+            .geo-education-icon {
+              display: inline-flex;
+              align-items: center;
+              justify-content: center;
+              width: 16px;
+              height: 16px;
+              margin-left: 6px;
+              color: var(--status-active);
+              cursor: help;
+              position: relative;
+              vertical-align: middle;
+              opacity: 0.7;
+              transition: opacity 0.2s;
+            }
+
+            .geo-education-icon:hover {
+              opacity: 1;
+            }
+
+            /* 툴팁 */
+            .geo-education-icon::after {
+              content: attr(data-tooltip);
+              position: absolute;
+              left: 50%;
+              bottom: calc(100% + 8px);
+              transform: translateX(-50%);
+              padding: 12px;
+              background: var(--bg-primary);
+              border: 1px solid var(--border-color);
+              border-radius: var(--radius-md);
+              box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+              font-size: 12px;
+              line-height: 1.5;
+              color: var(--text-primary);
+              white-space: pre-wrap;
+              max-width: 400px;
+              width: max-content;
+              z-index: 1000;
+              opacity: 0;
+              pointer-events: none;
+              transition: opacity 0.2s;
+            }
+
+            .geo-education-icon:hover::after {
+              opacity: 1;
+              pointer-events: auto;
+            }
+
+            /* 툴팁 화살표 */
+            .geo-education-icon::before {
+              content: '';
+              position: absolute;
+              left: 50%;
+              bottom: calc(100% + 2px);
+              transform: translateX(-50%);
+              width: 0;
+              height: 0;
+              border-left: 6px solid transparent;
+              border-right: 6px solid transparent;
+              border-top: 6px solid var(--border-color);
+              z-index: 1001;
+              opacity: 0;
+              pointer-events: none;
+              transition: opacity 0.2s;
+            }
+
+            .geo-education-icon:hover::before {
+              opacity: 1;
+            }
+
+            /* === AI 컨설턴트 분석 섹션 === */
+            .geo-ai-analysis {
+              background: rgba(9, 12, 17, 0.72);
+              border: 1px solid rgba(255, 255, 255, 0.08);
+              border-radius: 16px;
+              box-shadow: var(--shadow);
+              margin-top: 0;
+              margin-bottom: 0;
+              overflow: hidden;
+            }
+
+            .geo-ai-analysis > h3 {
+              font-size: 15px;
+              font-weight: 700;
+              color: var(--text-primary);
+              margin: 0;
+              padding: 14px;
+              border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+            }
+
+            .geo-ai-section {
+              margin: 0;
+              padding: 14px;
+              background: transparent;
+              border: 0;
+              border-top: 1px solid rgba(255, 255, 255, 0.08);
+              border-radius: 0;
+            }
+
+            .geo-ai-section:first-of-type {
+              border-top: 0;
+            }
+
+            .geo-ai-section > h4 {
+              font-size: 13px;
+              font-weight: 600;
+              color: var(--text-primary);
+              margin-bottom: 10px;
+              padding-bottom: 0;
+              border-bottom: 0;
+            }
+
+            .geo-ai-content {
+              font-size: 13px;
+              color: var(--text-secondary);
+              line-height: 1.6;
+            }
+
+            .geo-ai-content p {
+              margin-bottom: 12px;
+            }
+
+            .geo-ai-content p:last-child {
+              margin-bottom: 0;
+            }
+
+            .geo-ai-status {
+              color: var(--text-secondary);
+            }
+
+            .geo-ai-status.is-error {
+              color: #fca5a5;
+            }
+
+            .geo-item-spacer {
+              height: 8px;
+            }
+
+            .tools-tab-shell {
+              flex-direction: column;
+              gap: 0;
+            }
+
+            .tab-content.active.tools-tab-shell {
+              display: flex;
+            }
+
+            .tools-subtabs {
+              margin-bottom: 12px;
+            }
+
+            .tools-current-site {
+              display: flex;
+              flex-wrap: wrap;
+              align-items: center;
+              gap: 8px;
+              margin-top: 10px;
+              font-size: 12px;
+            }
+
+            .tools-current-site-label {
+              color: var(--text-disabled);
+            }
+
+            .tools-current-site-value {
+              color: var(--text-primary);
+              font-weight: 600;
+            }
+
+            .tools-current-site-value.is-disabled {
+              color: var(--text-disabled);
+            }
+
+            .tools-card-stack {
+              display: flex;
+              flex-direction: column;
+              gap: 16px;
+            }
+
+            .tools-panel {
+              display: none;
+            }
+
+            .tools-panel.active {
+              display: block;
+            }
+
+            .tools-card {
+              background: rgba(9, 12, 17, 0.72);
+              border: 1px solid rgba(255, 255, 255, 0.08);
+              border-radius: 16px;
+              overflow: hidden;
+            }
+
+            .tools-card-header {
+              padding: 14px 14px 12px;
+            }
+
+            .tools-card-head {
+              font-size: 14px;
+              font-weight: 700;
+              color: var(--text-primary);
+            }
+
+            .tools-card-head-group {
+              display: inline-flex;
+              align-items: center;
+              gap: 8px;
+              min-width: 0;
+            }
+
+            .tools-card-head-row {
+              display: flex;
+              align-items: center;
+              justify-content: space-between;
+              gap: 12px;
+            }
+
+            .tools-card-mini-meta {
+              font-size: 11px;
+              color: var(--status-active);
+              font-weight: 700;
+              white-space: nowrap;
+            }
+
+            .tools-card-meta {
+              margin-top: 6px;
+              font-size: 12px;
+              line-height: 1.6;
+              color: var(--text-secondary);
+            }
+
+            .tools-range-strip {
+              display: flex;
+              flex-wrap: wrap;
+              align-items: center;
+              gap: 10px;
+              margin-bottom: 10px;
+            }
+
+            .tools-range-chips {
+              display: flex;
+              flex-wrap: wrap;
+              gap: 8px;
+            }
+
+            .tools-range-chip {
+              border: 1px solid rgba(255, 255, 255, 0.08);
+              background: rgba(255, 255, 255, 0.04);
+              color: var(--text-secondary);
+              min-height: 32px;
+              padding: 0 12px;
+              border-radius: 999px;
+              font-size: 12px;
+              font-weight: 700;
+              cursor: pointer;
+              transition: all 0.2s ease;
+            }
+
+            .tools-range-chip:hover {
+              border-color: rgba(42, 108, 240, 0.28);
+              color: var(--text-primary);
+            }
+
+            .tools-range-chip.active {
+              border-color: rgba(42, 108, 240, 0.48);
+              background: rgba(42, 108, 240, 0.18);
+              color: #dbeafe;
+            }
+
+            .tools-range-summary {
+              font-size: 12px;
+              color: var(--text-secondary);
+            }
+
+            .tools-action-stack,
+            .tools-visit-list {
+              display: flex;
+              flex-direction: column;
+            }
+
+            .tools-action-row,
+            .tools-visit-item {
+              width: 100%;
+              border: 0;
+              border-top: 1px solid rgba(255, 255, 255, 0.07);
+              background: transparent;
+              color: inherit;
+            }
+
+            .tools-action-row {
+              display: grid;
+              grid-template-columns: minmax(0, 1fr) auto;
+              gap: 12px;
+              align-items: center;
+              padding: 14px;
+              transition: background 0.2s ease, opacity 0.2s ease;
+            }
+
+            .tools-action-row:hover,
+            .tools-visit-item:hover {
+              background: rgba(255, 255, 255, 0.03);
+            }
+
+            .tools-action-row.is-confirming {
+              background: rgba(239, 68, 68, 0.1);
+            }
+
+            .tools-action-row.is-disabled {
+              opacity: 0.72;
+            }
+
+            .tools-action-row.is-disabled .tools-action-title {
+              color: var(--text-disabled);
+            }
+
+            .tools-action-body {
+              min-width: 0;
+            }
+
+            .tools-action-title-row {
+              display: inline-flex;
+              align-items: center;
+              gap: 8px;
+              min-width: 0;
+            }
+
+            .tools-action-title {
+              font-size: 13px;
+              font-weight: 600;
+              color: var(--text-primary);
+              white-space: nowrap;
+            }
+
+            .tools-action-controls {
+              display: inline-flex;
+              align-items: center;
+              gap: 8px;
+              flex-wrap: nowrap;
+            }
+
+            .tools-inline-select-wrap {
+              position: relative;
+              display: inline-flex;
+              align-items: center;
+              min-width: 96px;
+            }
+
+            .tools-inline-select-wrap::after {
+              content: '';
+              position: absolute;
+              right: 12px;
+              top: 50%;
+              width: 7px;
+              height: 7px;
+              border-right: 2px solid rgba(255, 255, 255, 0.68);
+              border-bottom: 2px solid rgba(255, 255, 255, 0.68);
+              transform: translateY(-65%) rotate(45deg);
+              pointer-events: none;
+            }
+
+            .tools-inline-select {
+              appearance: none;
+              color-scheme: dark;
+              width: 100%;
+              min-height: 34px;
+              padding: 0 32px 0 12px;
+              border-radius: 999px;
+              border: 1px solid rgba(255, 255, 255, 0.08);
+              background: rgba(255, 255, 255, 0.04);
+              color: var(--text-primary);
+              font-size: 12px;
+              font-weight: 700;
+              cursor: pointer;
+              outline: none;
+            }
+
+            .tools-inline-select option {
+              background: #12161e;
+              color: var(--text-primary);
+            }
+
+            .tools-inline-select:disabled {
+              color: var(--text-disabled);
+              cursor: not-allowed;
+            }
+
+            .tools-action-btn {
+              border: 0;
+              display: inline-flex;
+              align-items: center;
+              justify-content: center;
+              min-width: 74px;
+              min-height: 34px;
+              padding: 0 12px;
+              border-radius: 999px;
+              background: rgba(255, 255, 255, 0.06);
+              color: var(--text-primary);
+              font-size: 12px;
+              font-weight: 700;
+              white-space: nowrap;
+              cursor: pointer;
+              transition: all 0.2s ease;
+            }
+
+            .tools-action-btn:hover:not(:disabled) {
+              background: rgba(255, 255, 255, 0.1);
+            }
+
+            .tools-action-btn:disabled {
+              cursor: not-allowed;
+              color: var(--text-disabled);
+            }
+
+            .tools-action-btn.is-confirming {
+              background: rgba(239, 68, 68, 0.2);
+              color: #fecaca;
+            }
+
+            .tools-action-btn.is-busy {
+              background: rgba(42, 108, 240, 0.2);
+              color: #dbeafe;
+            }
+
+            .tools-card-footnote {
+              padding: 12px 14px 14px;
+              border-top: 1px solid rgba(255, 255, 255, 0.07);
+              font-size: 12px;
+              line-height: 1.55;
+              color: var(--text-secondary);
+            }
+
+            .tools-card-footnote.is-disabled {
+              color: var(--text-disabled);
+            }
+
+            .tools-visit-item {
+              appearance: none;
+              display: grid;
+              grid-template-columns: 30px minmax(0, 1fr);
+              gap: 12px;
+              align-items: start;
+              padding: 14px;
+              cursor: pointer;
+              text-align: left;
+              transition: background 0.2s ease;
+            }
+
+            .tools-visit-rank {
+              display: inline-flex;
+              align-items: center;
+              justify-content: center;
+              width: 30px;
+              height: 30px;
+              border-radius: 10px;
+              background: rgba(42, 108, 240, 0.16);
+              color: #dbeafe;
+              font-size: 12px;
+              font-weight: 700;
+            }
+
+            .tools-visit-body {
+              min-width: 0;
+            }
+
+            .tools-visit-head {
+              display: flex;
+              align-items: center;
+              justify-content: space-between;
+              gap: 12px;
+            }
+
+            .tools-visit-site {
+              min-width: 0;
+              font-size: 13px;
+              font-weight: 700;
+              color: var(--text-primary);
+              white-space: nowrap;
+              overflow: hidden;
+              text-overflow: ellipsis;
+            }
+
+            .tools-visit-count {
+              flex-shrink: 0;
+              font-size: 11px;
+              font-weight: 700;
+              color: var(--status-active);
+            }
+
+            .tools-visit-title {
+              margin-top: 6px;
+              font-size: 12px;
+              line-height: 1.5;
+              color: var(--text-secondary);
+              white-space: nowrap;
+              overflow: hidden;
+              text-overflow: ellipsis;
+            }
+
+            .tools-visit-meta-row {
+              display: flex;
+              flex-wrap: wrap;
+              gap: 10px;
+              margin-top: 8px;
+              font-size: 11px;
+              color: var(--text-disabled);
+            }
+
+            .tools-visit-loading,
+            .tools-visit-empty {
+              display: flex;
+              align-items: center;
+              gap: 8px;
+              padding: 14px;
+              border-top: 1px solid rgba(255, 255, 255, 0.07);
+              font-size: 12px;
+              line-height: 1.6;
+              color: var(--text-secondary);
+            }
+
+            .errors-stack {
+              display: flex;
+              flex-direction: column;
+              gap: 16px;
+            }
+
+            .errors-summary-card,
+            .errors-list-card {
+              background: rgba(9, 12, 17, 0.72);
+              border: 1px solid rgba(255, 255, 255, 0.08);
+              border-radius: 16px;
+              overflow: hidden;
+            }
+
+            .errors-card-header {
+              display: flex;
+              align-items: center;
+              justify-content: space-between;
+              gap: 12px;
+              padding: 14px 14px 12px;
+            }
+
+            .errors-card-head-group {
+              display: inline-flex;
+              align-items: center;
+              gap: 8px;
+              min-width: 0;
+            }
+
+            .errors-card-head {
+              font-size: 14px;
+              font-weight: 700;
+              color: var(--text-primary);
+            }
+
+            .errors-summary-grid {
+              display: grid;
+              grid-template-columns: repeat(4, minmax(0, 1fr));
+              gap: 10px;
+              padding: 0 14px 14px;
+            }
+
+            .errors-summary-stat {
+              display: flex;
+              flex-direction: column;
+              gap: 4px;
+              padding: 12px;
+              border-radius: 14px;
+              background: rgba(255, 255, 255, 0.03);
+              border: 1px solid rgba(255, 255, 255, 0.06);
+            }
+
+            .errors-summary-value {
+              font-size: 22px;
+              font-weight: 800;
+              color: var(--text-primary);
+              line-height: 1;
+            }
+
+            .errors-summary-label {
+              font-size: 11px;
+              font-weight: 700;
+              color: var(--text-secondary);
+            }
+
+            .errors-toolbar {
+              display: flex;
+              flex-wrap: wrap;
+              gap: 8px;
+              padding: 0 14px 14px;
+            }
+
+            .errors-toolbar-btn {
+              min-height: 34px;
+              padding: 0 12px;
+              border-radius: 999px;
+              border: 1px solid rgba(255, 255, 255, 0.08);
+              background: rgba(255, 255, 255, 0.04);
+              color: var(--text-primary);
+              font-size: 12px;
+              font-weight: 700;
+              cursor: pointer;
+              transition: all 0.2s ease;
+            }
+
+            .errors-toolbar-btn:hover:not(:disabled) {
+              border-color: rgba(42, 108, 240, 0.3);
+              background: rgba(42, 108, 240, 0.12);
+            }
+
+            .errors-toolbar-btn:disabled {
+              color: var(--text-disabled);
+              opacity: 0.6;
+              cursor: not-allowed;
+            }
+
+            .errors-toolbar-btn-danger {
+              color: #fca5a5;
+              border-color: rgba(239, 68, 68, 0.24);
+            }
+
+            .errors-toolbar-btn-danger:hover:not(:disabled),
+            .errors-toolbar-btn-danger.is-confirming {
+              background: rgba(239, 68, 68, 0.12);
+              border-color: rgba(239, 68, 68, 0.42);
+              color: #fecaca;
+            }
+
+            .errors-list-header {
+              border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+            }
+
+            .errors-list-meta {
+              font-size: 11px;
+              font-weight: 700;
+              color: var(--text-secondary);
+              white-space: nowrap;
+            }
+
+            .errors-empty {
+              display: flex;
+              align-items: center;
+              justify-content: center;
+              min-height: 132px;
+              padding: 20px 14px;
+              color: var(--text-secondary);
+              font-size: 13px;
+              text-align: center;
+            }
+
+            .errors-list {
+              display: flex;
+              flex-direction: column;
+            }
+
+            .errors-item {
+              padding: 14px;
+              border-top: 1px solid rgba(255, 255, 255, 0.07);
+            }
+
+            .errors-item:first-child {
+              border-top: 0;
+            }
+
+            .errors-item-top {
+              display: flex;
+              align-items: center;
+              justify-content: space-between;
+              gap: 12px;
+            }
+
+            .errors-item-head {
+              display: inline-flex;
+              align-items: center;
+              gap: 8px;
+              min-width: 0;
+              flex-wrap: wrap;
+            }
+
+            .errors-level-badge {
+              display: inline-flex;
+              align-items: center;
+              justify-content: center;
+              min-width: 54px;
+              min-height: 22px;
+              padding: 0 8px;
+              border-radius: 999px;
+              font-size: 10px;
+              font-weight: 800;
+              letter-spacing: 0.04em;
+            }
+
+            .errors-level-badge.is-error {
+              background: rgba(239, 68, 68, 0.14);
+              color: #fecaca;
+            }
+
+            .errors-level-badge.is-warn {
+              background: rgba(245, 158, 11, 0.14);
+              color: #fde68a;
+            }
+
+            .errors-item-namespace,
+            .errors-item-event,
+            .errors-item-time {
+              font-size: 11px;
+              color: var(--text-secondary);
+            }
+
+            .errors-item-message {
+              margin-top: 8px;
+              color: var(--text-primary);
+              font-size: 13px;
+              line-height: 1.6;
+              word-break: break-word;
+            }
+
+            .errors-item-detail {
+              margin-top: 6px;
+              color: #fca5a5;
+              font-size: 12px;
+              line-height: 1.6;
+              word-break: break-word;
+            }
+
+            .errors-item-stack-wrap {
+              margin-top: 8px;
+            }
+
+            .errors-item-stack-wrap summary {
+              cursor: pointer;
+              color: var(--text-secondary);
+              font-size: 12px;
+              font-weight: 600;
+            }
+
+            .errors-item-stack {
+              margin: 8px 0 0;
+              padding: 10px 12px;
+              border-radius: 12px;
+              background: rgba(255, 255, 255, 0.03);
+              border: 1px solid rgba(255, 255, 255, 0.06);
+              color: var(--text-secondary);
+              font-size: 11px;
+              line-height: 1.55;
+              white-space: pre-wrap;
+              word-break: break-word;
+            }
+
+            /* 토스트 info 타입 스타일 */
+            .toast.info {
+              background: var(--status-active);
+            }
+
+            @keyframes spin {
+              to { transform: rotate(360deg); }
+            }

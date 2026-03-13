@@ -18,6 +18,8 @@
           START_PRECISE_RETRANSLATION: 'START_PRECISE_RETRANSLATION',
           RESTORE_PAGE_ORIGINAL: 'RESTORE_PAGE_ORIGINAL',
           TRANSLATE_SELECTION: 'TRANSLATE_SELECTION',
+          COPY_SELECTION: 'COPY_SELECTION',
+          EXPLAIN_SELECTION: 'EXPLAIN_SELECTION',
           GET_PROGRESS_V2: 'GET_PROGRESS_V2',
           OPEN_QUICK_TRANSLATE_PANEL: 'OPEN_QUICK_TRANSLATE_PANEL',
           TRANSLATE_FULL_PAGE: 'translateFullPage',
@@ -26,7 +28,15 @@
           GET_TRANSLATED_TITLE: 'getTranslatedTitle',
           GET_CACHE_STATUS: 'getCacheStatus',
           CLEAR_CACHE_FOR_DOMAIN: 'clearCacheForDomain'
-        }
+        },
+        STORAGE_KEYS: {
+          PENDING_QUICK_TRANSLATE: 'pendingQuickTranslate'
+        },
+        SELECTION_ACTIONS: [
+          { key: 'translate', label: '번역', tone: 'primary', messageAction: 'TRANSLATE_SELECTION' },
+          { key: 'copy', label: '복사', tone: 'secondary', messageAction: 'COPY_SELECTION' },
+          { key: 'explain', label: '설명하기', tone: 'secondary', messageAction: 'EXPLAIN_SELECTION' }
+        ]
       };
     }
   } catch (_) {

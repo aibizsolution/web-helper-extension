@@ -11,6 +11,7 @@ import { logInfo, logError } from '../logger.js';
 import { showToast, switchTab } from './ui-utils.js';
 import { consumePendingQuickTranslate, getActiveTranslationConfig, storePendingQuickTranslate } from './storage.js';
 import { translateSelection } from './provider-client.js';
+import { STORAGE_KEYS } from './constants.js';
 
 const MAX_HISTORY_COUNT = 50;
 const STORAGE_KEY = 'quickTranslationHistory';
@@ -44,7 +45,7 @@ function bindPendingQuickTranslateListener() {
   }
 
   chrome.storage.onChanged.addListener((changes, area) => {
-    if (area !== 'session' || !changes.pendingQuickTranslate?.newValue?.text) {
+    if (area !== 'session' || !changes[STORAGE_KEYS.PENDING_QUICK_TRANSLATE]?.newValue?.text) {
       return;
     }
     void hydratePendingQuickTranslate();
@@ -68,7 +69,7 @@ async function hydratePendingQuickTranslate() {
       displayTranslationResult(pending.text, pending.translation);
     }
 
-    await switchTab('quickTranslate');
+    await switchTab('text');
   } catch (error) {
     logError('quickTranslate', 'PENDING_LOAD_ERROR', '선택 번역 연동 실패', {}, error);
   }

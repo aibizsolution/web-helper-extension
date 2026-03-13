@@ -15,6 +15,7 @@ import {
   TRANSLATION_PIPELINE_VERSION,
   getDefaultModelForProvider
 } from './provider-catalog.js';
+import { STORAGE_KEYS } from './constants.js';
 
 const LEGACY_KEYS = ['apiKey', 'model', 'batchSize', 'concurrency'];
 const SETTING_KEYS = [
@@ -281,7 +282,7 @@ export async function getSettingsForForm() {
  */
 export async function storePendingQuickTranslate(payload) {
   await chrome.storage.session.set({
-    pendingQuickTranslate: {
+    [STORAGE_KEYS.PENDING_QUICK_TRANSLATE]: {
       text: payload?.text || '',
       translation: payload?.translation || '',
       ts: Date.now()
@@ -294,8 +295,8 @@ export async function storePendingQuickTranslate(payload) {
  * @returns {Promise<object|null>} 선택 번역 데이터
  */
 export async function consumePendingQuickTranslate() {
-  const result = await chrome.storage.session.get(['pendingQuickTranslate']);
-  const payload = result.pendingQuickTranslate || null;
-  await chrome.storage.session.remove('pendingQuickTranslate');
+  const result = await chrome.storage.session.get([STORAGE_KEYS.PENDING_QUICK_TRANSLATE]);
+  const payload = result[STORAGE_KEYS.PENDING_QUICK_TRANSLATE] || null;
+  await chrome.storage.session.remove(STORAGE_KEYS.PENDING_QUICK_TRANSLATE);
   return payload;
 }

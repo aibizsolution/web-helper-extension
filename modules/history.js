@@ -10,9 +10,8 @@
 
 import { logInfo, logWarn, logError, logDebug } from '../logger.js';
 import {
-  currentTabId,
-  lastHistoryCompletionMeta,
-  lastTranslateMode,
+  getLastHistoryCompletionMeta,
+  getLastTranslateMode,
   translateModeByTab,
   setLastHistoryCompletionMeta,
   setLastTranslateMode
@@ -396,7 +395,7 @@ export async function handleHistoryItemOpen(entry) {
 
     setLastTranslateMode(entry.mode === 'fresh' || entry.mode === 'precise' ? 'fresh' : 'fast');
     // 탭별 모드도 설정 (완료 후 히스토리 저장 시 올바른 모드 사용)
-    translateModeByTab.set(newTab.id, lastTranslateMode);
+    translateModeByTab.set(newTab.id, getLastTranslateMode());
 
     // 번역 탭으로 자동 전환
     await switchTab('translate');
@@ -480,7 +479,8 @@ export async function handleTranslationCompletedForHistory(tabId, data) {
     const signature = `${tabId}-${data.totalTexts}-${data.translatedCount}-${data.activeMs}`;
     const now = Date.now();
 
-    if (lastHistoryCompletionMeta.signature === signature && now - lastHistoryCompletionMeta.ts < 2000) {
+    const lastCompletionMeta = getLastHistoryCompletionMeta();
+    if (lastCompletionMeta.signature === signature && now - lastCompletionMeta.ts < 2000) {
       return;
     }
 
@@ -518,7 +518,7 @@ export async function handleTranslationCompletedForHistory(tabId, data) {
     }
 
     const previewText = progressPreview ? progressPreview.slice(0, 120) : '';
-    const mode = translateModeByTab.get(tabId) || lastTranslateMode;
+    const mode = translateModeByTab.get(tabId) || getLastTranslateMode();
 
     await saveHistoryEntry({
       url: tab.url,
