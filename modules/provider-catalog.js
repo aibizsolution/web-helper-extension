@@ -10,7 +10,7 @@
 export const TRANSLATION_PIPELINE_VERSION = 'v2';
 export const FAST_PAGE_PROVIDER = 'builtin-fast';
 export const FAST_PAGE_MODEL = 'google-web-mt';
-export const FAST_PAGE_ENGINE_LABEL = '초고속 번역 엔진';
+export const FAST_PAGE_ENGINE_LABEL = '구글 번역 엔진';
 
 export const PROVIDER_CATALOG = {
   openrouter: {
@@ -51,7 +51,7 @@ export const PROVIDER_IDS = Object.keys(PROVIDER_CATALOG);
 export const TRANSLATION_PROFILES = {
   fast: {
     id: 'fast',
-    label: '초고속 번역',
+    label: '구글 번역',
     requestBudget: 900,
     parallelRequests: 4,
     readStringCache: true,

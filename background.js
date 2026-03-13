@@ -8,8 +8,15 @@
  * - 전체 캐시 상태 조회
  */
 
-import { ACTIONS, SELECTION_ACTIONS, SELECTION_CONTEXT_MENU_ROOT_ID, STORAGE_KEYS } from './modules/constants.js';
+import {
+  ACTIONS,
+  SELECTION_ACTIONS,
+  SELECTION_CONTEXT_MENU_ROOT_ID,
+  SELECTION_SEARCH_TARGETS,
+  STORAGE_KEYS
+} from './modules/constants.js';
 import { CONTENT_SCRIPT_FILES, PANEL_SESSION_KEY } from './modules/panel-constants.js';
+import { getSearchTargetLabel, getSearchUrls } from './modules/search-targets.js';
 
 const LEVEL_MAP = { DEBUG: 0, INFO: 1, WARN: 2, ERROR: 3 };
 let currentLogLevel = 'INFO';
@@ -19,7 +26,12 @@ const SIDE_PANEL_COMMAND_ID = 'open-side-panel';
 const openSidePanelWindows = new Set();
 
 const selectionActionByMenuId = new Map(
-  SELECTION_ACTIONS.map((action) => [action.contextMenuId, action])
+  SELECTION_ACTIONS
+    .filter((action) => !action.submenu)
+    .map((action) => [action.contextMenuId, action])
+);
+const selectionSearchTargetByMenuId = new Map(
+  SELECTION_SEARCH_TARGETS.map((target) => [target.contextMenuId, target])
 );
 
 (async () => {
@@ -183,14 +195,34 @@ async function registerContextMenus() {
       title: '웹 도우미',
       contexts: ['selection']
     });
-    SELECTION_ACTIONS.forEach((action) => {
+    SELECTION_ACTIONS
+      .filter((action) => !action.submenu)
+      .forEach((action) => {
+        chrome.contextMenus.create({
+          id: action.contextMenuId,
+          parentId: SELECTION_CONTEXT_MENU_ROOT_ID,
+          title: action.label,
+          contexts: ['selection']
+        });
+      });
+
+    const searchMenu = SELECTION_ACTIONS.find((action) => action.key === 'search');
+    if (searchMenu) {
       chrome.contextMenus.create({
-        id: action.contextMenuId,
+        id: searchMenu.contextMenuId,
         parentId: SELECTION_CONTEXT_MENU_ROOT_ID,
-        title: action.label,
+        title: searchMenu.label,
         contexts: ['selection']
       });
-    });
+      SELECTION_SEARCH_TARGETS.forEach((target) => {
+        chrome.contextMenus.create({
+          id: target.contextMenuId,
+          parentId: searchMenu.contextMenuId,
+          title: target.label,
+          contexts: ['selection']
+        });
+      });
+    }
     logInfo('CONTEXT_MENU_REGISTERED', '선택 번역 메뉴 등록 완료');
   } catch (error) {
     logError('CONTEXT_MENU_REGISTER_FAILED', '선택 번역 메뉴 등록 실패', {}, error);
@@ -217,6 +249,17 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
   }
 
   try {
+    const searchTarget = selectionSearchTargetByMenuId.get(info.menuItemId);
+    if (searchTarget) {
+      const openedCount = await openSelectionSearchTabs(info.selectionText, searchTarget.key);
+      logInfo('SELECTION_SEARCH_MENU_OPENED', '우클릭 선택 검색 열기', {
+        tabId: tab.id,
+        engine: searchTarget.key,
+        openedCount
+      });
+      return;
+    }
+
     await ensureContentScript(tab.id);
     const selectedAction = selectionActionByMenuId.get(info.menuItemId);
     const action = selectedAction?.messageAction || '';
@@ -263,6 +306,17 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         sendResponse({ success: false, error: error.message });
       }
     })();
+    return true;
+  }
+
+  if (request.action === ACTIONS.SEARCH_SELECTION) {
+    openSelectionSearchTabs(request.text || '', request.engine || 'google')
+      .then((openedCount) => sendResponse({
+        success: true,
+        openedCount,
+        label: getSearchTargetLabel(request.engine || 'google')
+      }))
+      .catch((error) => sendResponse({ success: false, error: error.message }));
     return true;
   }
 
@@ -329,6 +383,24 @@ async function translateIndexedTextFast(text, targetLanguage) {
   }
 
   return translatedText;
+}
+
+async function openSelectionSearchTabs(text, engine) {
+  const query = String(text || '').trim();
+  if (!query) {
+    throw new Error('검색할 선택 텍스트가 없습니다.');
+  }
+
+  const urls = getSearchUrls(engine, query);
+  if (!urls.length) {
+    throw new Error('지원하지 않는 검색 엔진입니다.');
+  }
+
+  for (const url of urls) {
+    await chrome.tabs.create({ url, active: false });
+  }
+
+  return urls.length;
 }
 
 async function getTotalCacheStatusFromDB() {

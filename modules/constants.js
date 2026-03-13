@@ -3,6 +3,8 @@
  * - 메시지 액션/포트 명/스토리지 키 등 문자열 상수를 중앙화
  */
 
+import { getSelectionSearchTargets } from './search-targets.js';
+
 export const PORT_NAMES = {
   PANEL: 'panel'
 };
@@ -15,6 +17,7 @@ export const ACTIONS = {
   TRANSLATE_SELECTION: 'TRANSLATE_SELECTION',
   COPY_SELECTION: 'COPY_SELECTION',
   EXPLAIN_SELECTION: 'EXPLAIN_SELECTION',
+  SEARCH_SELECTION: 'SEARCH_SELECTION',
   GET_PROGRESS_V2: 'GET_PROGRESS_V2',
   OPEN_QUICK_TRANSLATE_PANEL: 'OPEN_QUICK_TRANSLATE_PANEL',
   FAST_TRANSLATE_INDEXED_TEXT: 'FAST_TRANSLATE_INDEXED_TEXT',
@@ -64,6 +67,19 @@ export const SELECTION_ACTIONS = [
     tone: 'secondary',
     contextMenuId: 'wpt-selection-explain',
     messageAction: ACTIONS.EXPLAIN_SELECTION
+  },
+  {
+    key: 'search',
+    label: '검색',
+    tone: 'secondary',
+    contextMenuId: 'wpt-selection-search',
+    submenu: true
   }
 ];
+
+export const SELECTION_SEARCH_TARGETS = getSelectionSearchTargets().map((target) => ({
+  key: target.key,
+  label: target.label,
+  contextMenuId: `wpt-selection-search-${target.key}`
+}));
 

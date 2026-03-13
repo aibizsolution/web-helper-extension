@@ -20,6 +20,7 @@
           TRANSLATE_SELECTION: 'TRANSLATE_SELECTION',
           COPY_SELECTION: 'COPY_SELECTION',
           EXPLAIN_SELECTION: 'EXPLAIN_SELECTION',
+          SEARCH_SELECTION: 'SEARCH_SELECTION',
           GET_PROGRESS_V2: 'GET_PROGRESS_V2',
           OPEN_QUICK_TRANSLATE_PANEL: 'OPEN_QUICK_TRANSLATE_PANEL',
           TRANSLATE_FULL_PAGE: 'translateFullPage',
@@ -35,7 +36,16 @@
         SELECTION_ACTIONS: [
           { key: 'translate', label: '번역', tone: 'primary', messageAction: 'TRANSLATE_SELECTION' },
           { key: 'copy', label: '복사', tone: 'secondary', messageAction: 'COPY_SELECTION' },
-          { key: 'explain', label: '설명하기', tone: 'secondary', messageAction: 'EXPLAIN_SELECTION' }
+          { key: 'explain', label: '설명하기', tone: 'secondary', messageAction: 'EXPLAIN_SELECTION' },
+          { key: 'search', label: '검색', tone: 'secondary', messageAction: 'SEARCH_SELECTION' }
+        ],
+        SELECTION_SEARCH_TARGETS: [
+          { key: 'google', label: 'Google' },
+          { key: 'naver', label: 'Naver' },
+          { key: 'bing', label: 'Bing' },
+          { key: 'chatgpt', label: 'ChatGPT' },
+          { key: 'perplexity', label: 'Perplexity' },
+          { key: 'all', label: '전체 검색' }
         ]
       };
     }

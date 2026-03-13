@@ -466,7 +466,7 @@ function formatHistoryMode(mode) {
   if (mode === 'fresh' || mode === 'precise') {
     return 'AI 정밀 번역';
   }
-  return '초고속 번역';
+  return '구글 번역';
 }
 
 /**

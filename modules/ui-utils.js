@@ -351,9 +351,9 @@ export function updateUI(hasPermission = true) {
   }
 
   configureTranslationButton(fastBtn, {
-    label: fastToggleActive ? '원본 보기' : '초고속 번역',
+    label: fastToggleActive ? '원본 보기' : '구글 번역',
     title: fastToggleActive
-      ? '초고속 번역을 멈추고 현재 페이지를 원문으로 되돌립니다.'
+      ? '구글 번역을 멈추고 현재 페이지를 원문으로 되돌립니다.'
       : 'API Key 없이 현재 페이지를 빠르게 읽을 수 있게 번역합니다.',
     disabled: !hasPermission || preciseToggleActive,
     active: fastToggleActive,

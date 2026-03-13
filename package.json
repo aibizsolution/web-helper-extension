@@ -1,0 +1,15 @@
+{
+  "name": "web-helper-extension",
+  "version": "2.4.0",
+  "private": true,
+  "description": "웹 도우미 Chrome extension development tooling",
+  "type": "module",
+  "scripts": {
+    "check": "node scripts/check-js.mjs",
+    "check:js": "node scripts/check-js.mjs",
+    "test:providers": "node scripts/test-provider-models.mjs"
+  },
+  "devDependencies": {
+    "playwright": "1.58.2"
+  }
+}

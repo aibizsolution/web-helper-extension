@@ -141,7 +141,7 @@
       const status = Number(error && error.status);
       const message = error && error.message ? error.message : '알 수 없는 오류가 발생했습니다.';
       if (provider === FAST_PAGE_PROVIDER) {
-        return Object.assign(new Error(message || '초고속 번역 엔진 응답이 불안정합니다.'), { status, provider });
+        return Object.assign(new Error(message || '구글 번역 엔진 응답이 불안정합니다.'), { status, provider });
       }
       if (status === 401 || status === 403) {
         return Object.assign(new Error(`${provider} API 키를 확인해주세요.`), { status, provider });
@@ -370,7 +370,7 @@
       }
 
       if (!response || response.success !== true) {
-        const error = new Error((response && response.error) || '초고속 번역 요청 실패');
+        const error = new Error((response && response.error) || '구글 번역 요청 실패');
         error.provider = FAST_PAGE_PROVIDER;
         throw error;
       }

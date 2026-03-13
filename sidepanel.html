@@ -43,9 +43,9 @@
               <div id="noApiKeyMessage" class="permission-card" style="display: none;">
                 <div class="permission-icon">🔑</div>
                 <div class="permission-message">
-                  초고속 페이지 번역은 바로 사용할 수 있습니다.<br>
+                  구글 번역은 바로 사용할 수 있습니다.<br>
                   AI 정밀 번역을 쓰려면 설정 탭에서 프로바이더 API Key를 먼저 입력해주세요.<br>
-                  선택 텍스트 번역은 설정 탭에서 초고속 또는 현재 AI 설정으로 고를 수 있습니다.
+                  선택 텍스트 번역은 설정 탭에서 구글 번역 또는 현재 AI 설정으로 고를 수 있습니다.
                 </div>
                 <div class="permission-actions">
                   <button id="goToSettingsBtn" class="btn">설정으로 이동</button>
@@ -60,7 +60,7 @@
                       <div>
                         <div class="translation-engine-title-row">
                           <h2 class="translation-engine-title">번역 엔진</h2>
-                          <span class="geo-tooltip-icon translation-tooltip-icon" tabindex="0" role="img" aria-label="초고속 번역은 API Key 없이 페이지를 빠르게 번역하고, AI 정밀 번역은 현재 선택한 프로바이더와 모델을 사용합니다. 선택 텍스트 번역 엔진은 설정 탭에서 따로 고를 수 있습니다." data-tooltip="초고속 번역은 API Key 없이 페이지를 빠르게 번역하고, AI 정밀 번역은 현재 선택한 프로바이더와 모델을 사용합니다. 선택 텍스트 번역 엔진은 설정 탭에서 따로 고를 수 있습니다.">?</span>
+                          <span class="geo-tooltip-icon translation-tooltip-icon" tabindex="0" role="img" aria-label="구글 번역은 API Key 없이 페이지를 빠르게 번역하고, AI 정밀 번역은 현재 선택한 프로바이더와 모델을 사용합니다. 선택 텍스트 번역 엔진은 설정 탭에서 따로 고를 수 있습니다." data-tooltip="구글 번역은 API Key 없이 페이지를 빠르게 번역하고, AI 정밀 번역은 현재 선택한 프로바이더와 모델을 사용합니다. 선택 텍스트 번역 엔진은 설정 탭에서 따로 고를 수 있습니다.">?</span>
                         </div>
                       </div>
                     </div>
@@ -89,12 +89,12 @@
                     <div id="providerSummary" class="translation-engine-summary">
                       <span class="translation-engine-summary-head">
                         <span class="translation-engine-summary-label">번역 도움말</span>
-                        <span class="geo-tooltip-icon translation-tooltip-icon" tabindex="0" role="img" aria-label="초고속 번역은 API Key 없이 빠르게 동작하고, AI 정밀 번역은 선택한 프로바이더와 모델을 사용합니다." data-tooltip="초고속 번역은 API Key 없이 빠르게 동작하고, AI 정밀 번역은 선택한 프로바이더와 모델을 사용합니다.">?</span>
+                        <span class="geo-tooltip-icon translation-tooltip-icon" tabindex="0" role="img" aria-label="구글 번역은 API Key 없이 빠르게 동작하고, AI 정밀 번역은 선택한 프로바이더와 모델을 사용합니다." data-tooltip="구글 번역은 API Key 없이 빠르게 동작하고, AI 정밀 번역은 선택한 프로바이더와 모델을 사용합니다.">?</span>
                       </span>
                     </div>
 
                     <div class="translation-action-grid">
-                      <button id="fastTranslateBtn" class="btn" title="API Key 없이 현재 페이지를 빠르게 읽을 수 있게 번역합니다.">초고속 번역</button>
+                      <button id="fastTranslateBtn" class="btn" title="API Key 없이 현재 페이지를 빠르게 읽을 수 있게 번역합니다.">구글 번역</button>
                       <button id="preciseTranslateBtn" class="btn secondary" title="선택한 프로바이더와 모델로 제목, 인용문, 경고문, 고유명사 보존을 더 우선해 번역합니다.">AI 정밀 번역</button>
                     </div>
                   </div>
@@ -643,7 +643,7 @@
                 <div class="settings-control-row">
                   <label for="selectionTranslateEnabled" class="settings-control-label">
                     <span>드래그 액션바</span>
-                    <span class="geo-tooltip-icon translation-tooltip-icon" tabindex="0" role="img" aria-label="페이지에서 텍스트를 드래그할 때 뜨는 번역/복사/설명하기 액션바를 켜거나 끕니다. 꺼도 우클릭 메뉴의 선택 텍스트 번역은 계속 사용할 수 있습니다." data-tooltip="페이지에서 텍스트를 드래그할 때 뜨는 번역/복사/설명하기 액션바를 켜거나 끕니다. 꺼도 우클릭 메뉴의 선택 텍스트 번역은 계속 사용할 수 있습니다.">?</span>
+                    <span class="geo-tooltip-icon translation-tooltip-icon" tabindex="0" role="img" aria-label="페이지에서 텍스트를 드래그할 때 뜨는 번역/복사/설명하기/검색 액션바를 켜거나 끕니다. 꺼도 우클릭 메뉴의 선택 텍스트 액션은 계속 사용할 수 있습니다." data-tooltip="페이지에서 텍스트를 드래그할 때 뜨는 번역/복사/설명하기/검색 액션바를 켜거나 끕니다. 꺼도 우클릭 메뉴의 선택 텍스트 액션은 계속 사용할 수 있습니다.">?</span>
                   </label>
                   <label class="toggle-switch">
                     <input type="checkbox" id="selectionTranslateEnabled" checked>
@@ -656,11 +656,11 @@
                 <div class="settings-control-row settings-select-row">
                   <label for="selectionTranslateMode" class="settings-control-label">
                     <span>선택 번역 엔진</span>
-                    <span class="geo-tooltip-icon translation-tooltip-icon" tabindex="0" role="img" aria-label="기본값은 초고속입니다. 필요할 때만 현재 패널의 AI 프로바이더와 모델을 선택 번역에 사용합니다." data-tooltip="기본값은 초고속입니다. 필요할 때만 현재 패널의 AI 프로바이더와 모델을 선택 번역에 사용합니다.">?</span>
+                    <span class="geo-tooltip-icon translation-tooltip-icon" tabindex="0" role="img" aria-label="기본값은 구글 번역입니다. 필요할 때만 현재 패널의 AI 프로바이더와 모델을 선택 번역에 사용합니다." data-tooltip="기본값은 구글 번역입니다. 필요할 때만 현재 패널의 AI 프로바이더와 모델을 선택 번역에 사용합니다.">?</span>
                   </label>
                   <div class="translation-engine-select-wrap settings-select-wrap">
                     <select id="selectionTranslateMode" class="translation-engine-select settings-compact-select">
-                      <option value="fast">초고속 (기본)</option>
+                      <option value="fast">구글 번역 (기본)</option>
                       <option value="provider">현재 AI 설정</option>
                     </select>
                   </div>

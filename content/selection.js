@@ -12,11 +12,23 @@
       : [
           { key: 'translate', label: '번역', tone: 'primary', messageAction: 'TRANSLATE_SELECTION' },
           { key: 'copy', label: '복사', tone: 'secondary', messageAction: 'COPY_SELECTION' },
-          { key: 'explain', label: '설명하기', tone: 'secondary', messageAction: 'EXPLAIN_SELECTION' }
+          { key: 'explain', label: '설명하기', tone: 'secondary', messageAction: 'EXPLAIN_SELECTION' },
+          { key: 'search', label: '검색', tone: 'secondary', messageAction: 'SEARCH_SELECTION' }
+        ];
+    const SELECTION_SEARCH_TARGETS = Array.isArray(WPT.Constants?.SELECTION_SEARCH_TARGETS)
+      ? WPT.Constants.SELECTION_SEARCH_TARGETS
+      : [
+          { key: 'google', label: 'Google' },
+          { key: 'naver', label: 'Naver' },
+          { key: 'bing', label: 'Bing' },
+          { key: 'chatgpt', label: 'ChatGPT' },
+          { key: 'perplexity', label: 'Perplexity' },
+          { key: 'all', label: '전체 검색' }
         ];
     const ACTION_TRANSLATE = SELECTION_ACTIONS.find((action) => action.key === 'translate')?.key || 'translate';
     const ACTION_COPY = SELECTION_ACTIONS.find((action) => action.key === 'copy')?.key || 'copy';
     const ACTION_EXPLAIN = SELECTION_ACTIONS.find((action) => action.key === 'explain')?.key || 'explain';
+    const ACTION_SEARCH = SELECTION_ACTIONS.find((action) => action.key === 'search')?.key || 'search';
     const ACTION_BAR_ID = 'wpt-selection-action-bar';
     const POPOVER_ID = 'wpt-selection-popover';
     const MODULE_GUARD_ATTR = 'data-wpt-selection-mounted';
@@ -534,7 +546,15 @@
     }
 
     function getPopoverTitle(mode) {
-      return mode === ACTION_EXPLAIN ? '선택 텍스트 설명' : '선택 텍스트 번역';
+      if (mode === ACTION_EXPLAIN) {
+        return '선택 텍스트 설명';
+      }
+
+      if (mode === ACTION_SEARCH) {
+        return '선택 텍스트 검색';
+      }
+
+      return '선택 텍스트 번역';
     }
 
     function getPopoverLoadingText(mode) {
@@ -549,6 +569,89 @@
       return mode === ACTION_EXPLAIN ? '설명' : '번역문';
     }
 
+    function getSearchTargetButtonStyle(isAll) {
+      return [
+        'border:none',
+        'border-radius:10px',
+        'padding:9px 10px',
+        isAll ? 'background:#2A6CF0' : 'background:rgba(255,255,255,0.06)',
+        isAll ? 'color:#FFFFFF' : 'color:#EDEEF0',
+        'cursor:pointer',
+        'font-size:12px',
+        'font-weight:700',
+        'white-space:nowrap'
+      ].join(';');
+    }
+
+    async function openSelectionSearch(engine, text) {
+      const payload = normalizeSelectionText(text);
+      if (!payload) {
+        throw new Error('검색할 선택 텍스트가 없습니다.');
+      }
+
+      const response = await chrome.runtime.sendMessage({
+        action: WPT.Constants?.ACTIONS?.SEARCH_SELECTION || 'SEARCH_SELECTION',
+        engine,
+        text: payload
+      });
+
+      if (!response || response.success !== true) {
+        throw new Error(response?.error || '검색을 열지 못했습니다.');
+      }
+
+      return response;
+    }
+
+    async function handleSearchTargetClick(engine, text) {
+      const target = SELECTION_SEARCH_TARGETS.find((item) => item.key === engine);
+      const label = target ? target.label : '검색';
+
+      try {
+        const response = await openSelectionSearch(engine, text);
+        showPopoverFeedback(`${response.label || label}을 새 탭으로 열었습니다.`, false);
+        setTemporaryButtonLabel(ACTION_SEARCH, '열림', false);
+      } catch (error) {
+        showPopoverFeedback(error?.message || '검색을 열지 못했습니다.', true);
+        setTemporaryButtonLabel(ACTION_SEARCH, '실패', true);
+      }
+    }
+
+    function renderSearchPopover(sourceText) {
+      const searchButtons = SELECTION_SEARCH_TARGETS
+        .map((target) => `
+          <button
+            type="button"
+            data-role="search-target"
+            data-engine="${escapeHtml(target.key)}"
+            style="${getSearchTargetButtonStyle(target.key === 'all')}"
+          >
+            ${escapeHtml(target.label)}
+          </button>
+        `)
+        .join('');
+
+      popoverEl.innerHTML = `
+        <div data-role="drag-handle" style="display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:10px; cursor:move; user-select:none;">
+          <div style="font-size:13px; font-weight:700;">${escapeHtml(getPopoverTitle(ACTION_SEARCH))}</div>
+          <button type="button" data-role="close" style="background:none; border:none; color:#A9AFB8; cursor:pointer; font-size:18px; line-height:1;">×</button>
+        </div>
+        <div style="font-size:12px; color:#A9AFB8; margin-bottom:8px;">${escapeHtml(sourceText)}</div>
+        <div style="font-size:12px; color:#CBD5E1; margin-bottom:10px;">검색할 엔진을 선택하세요.</div>
+        <div style="display:grid; grid-template-columns:repeat(3, minmax(0, 1fr)); gap:8px;">
+          ${searchButtons}
+        </div>
+        <div data-role="copy-feedback" style="min-height:18px; margin-top:10px; font-size:12px; opacity:0; transition:opacity 0.16s ease;"></div>
+      `;
+
+      popoverEl.querySelector('[data-role="drag-handle"]')?.addEventListener('mousedown', handlePopoverDragStart);
+      popoverEl.querySelector('[data-role="close"]')?.addEventListener('click', hidePopover);
+      popoverEl.querySelectorAll('[data-role="search-target"]').forEach((button) => {
+        button.addEventListener('click', () => {
+          void handleSearchTargetClick(button.getAttribute('data-engine') || '', sourceText);
+        });
+      });
+    }
+
     function renderPopover(view) {
       if (!popoverEl) {
         return;
@@ -556,6 +659,11 @@
 
       const mode = view && view.mode ? view.mode : ACTION_TRANSLATE;
       const sourceText = view && view.sourceText ? view.sourceText : '';
+      if (mode === ACTION_SEARCH) {
+        renderSearchPopover(sourceText);
+        return;
+      }
+
       const resultText = view && view.resultText ? view.resultText : '';
       const errorMessage = view && view.errorMessage ? view.errorMessage : '';
       const isLoading = Boolean(view && view.isLoading);
@@ -839,6 +947,24 @@
       return await explainSelectionText(text, options || {});
     }
 
+    function showSearchPopoverForSelection(text) {
+      const resolvedText = normalizeSelectionText(text)
+        || currentSelectionText
+        || (readSelection(document.activeElement, lastPointerAnchor) && currentSelectionText)
+        || '';
+
+      if (!resolvedText) {
+        setTemporaryButtonLabel(ACTION_SEARCH, '없음', true);
+        return;
+      }
+
+      showPopover({
+        mode: ACTION_SEARCH,
+        sourceText: resolvedText
+      });
+      hideChip();
+    }
+
     async function handleActionClick(action) {
       if (action === ACTION_COPY) {
         await copyCurrentSelectionText();
@@ -850,6 +976,11 @@
           return;
         }
         await explainCurrentSelection({ source: 'action-bar' });
+        return;
+      }
+
+      if (action === ACTION_SEARCH) {
+        showSearchPopoverForSelection(currentSelectionText);
         return;
       }
 
@@ -942,6 +1073,7 @@
       copySelectionText,
       explainSelectionText,
       explainCurrentSelection,
+      showSearchPopoverForSelection,
       hideChip,
       hidePopover
     };

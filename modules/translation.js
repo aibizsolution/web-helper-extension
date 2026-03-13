@@ -204,7 +204,7 @@ function updateTranslationConfigSummary() {
     summaryEl.innerHTML = [
       '<span class="translation-engine-summary-head">',
       '<span class="translation-engine-summary-label">번역 도움말</span>',
-      renderTooltipIcon('초고속 번역은 바로 사용할 수 있고, AI 정밀 번역은 설정 탭에서 프로바이더 API Key를 입력한 뒤 사용할 수 있습니다.'),
+      renderTooltipIcon('구글 번역은 바로 사용할 수 있고, AI 정밀 번역은 설정 탭에서 프로바이더 API Key를 입력한 뒤 사용할 수 있습니다.'),
       '</span>',
       '<span class="translation-engine-inline-note">설정에서 API Key 입력 필요</span>'
     ].join('');
@@ -212,11 +212,11 @@ function updateTranslationConfigSummary() {
   }
 
   const summaryTooltip = [
-    `초고속 번역은 ${FAST_PAGE_ENGINE_LABEL}(${FAST_PAGE_MODEL})로 API Key 없이 페이지를 빠르게 번역합니다.`,
+    `구글 번역은 ${FAST_PAGE_ENGINE_LABEL}(${FAST_PAGE_MODEL})로 API Key 없이 페이지를 빠르게 번역합니다.`,
     `AI 정밀 번역은 ${providerCatalog.label} ${modelLabel}을 사용하며, 제목/인용문/경고문/고유명사 보존을 더 우선합니다.`,
     hasApiKey
-      ? '선택 텍스트 번역 엔진은 설정 탭에서 초고속 또는 현재 AI provider로 따로 고를 수 있습니다.'
-      : '설정 탭에서 프로바이더 API Key를 입력하면 AI 정밀 번역을 쓸 수 있고, 선택 번역은 설정 탭에서 초고속/AI 중 고를 수 있습니다.'
+      ? '선택 텍스트 번역 엔진은 설정 탭에서 구글 번역 또는 현재 AI provider로 따로 고를 수 있습니다.'
+      : '설정 탭에서 프로바이더 API Key를 입력하면 AI 정밀 번역을 쓸 수 있고, 선택 번역은 설정 탭에서 구글 번역/AI 중 고를 수 있습니다.'
   ].join('\n');
 
   if (hasApiKey) {

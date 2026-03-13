@@ -15,7 +15,7 @@ Thumbs.db
 *.swo
 *~
 
-# Node modules (if you add build tools later)
+# Node modules
 node_modules/
 
 # Python

@@ -10,6 +10,11 @@ import { logInfo, logError } from '../logger.js';
 import { showToast } from './ui-utils.js';
 import { getActiveTranslationConfig } from './storage.js';
 import { runPrompt } from './provider-client.js';
+import {
+  SEARCH_ALL_TARGET,
+  SEARCH_TARGETS,
+  getSearchUrls
+} from './search-targets.js';
 
 export function getGoogleIcon() {
   return `<img class="search-engine-icon" alt="Google" width="24" height="24" src="https://www.google.com/s2/favicons?sz=128&domain=google.com" style="width: 20px; height: 20px;">`;
@@ -29,6 +34,23 @@ export function getChatGPTIcon() {
 
 export function getPerplexityIcon() {
   return `<img class="search-engine-icon" alt="Perplexity" width="24" height="24" src="https://www.google.com/s2/favicons?sz=128&domain=perplexity.ai" style="width: 20px; height: 20px;">`;
+}
+
+function getSearchTargetIcon(engine) {
+  switch (engine) {
+    case 'google':
+      return getGoogleIcon();
+    case 'naver':
+      return getNaverIcon();
+    case 'bing':
+      return getBingIcon();
+    case 'chatgpt':
+      return getChatGPTIcon();
+    case 'perplexity':
+      return getPerplexityIcon();
+    default:
+      return '';
+  }
 }
 
 export function initializeSearchTab() {
@@ -144,13 +166,11 @@ export function renderSearchRecommendations(newRecommendations) {
     const enginesEl = document.createElement('div');
     enginesEl.className = 'search-item-engines';
 
-    const engines = [
-      { name: 'google', label: 'Google', svg: getGoogleIcon() },
-      { name: 'naver', label: 'Naver', svg: getNaverIcon() },
-      { name: 'bing', label: 'Bing', svg: getBingIcon() },
-      { name: 'chatgpt', label: 'ChatGPT', svg: getChatGPTIcon() },
-      { name: 'perplexity', label: 'Perplexity', svg: getPerplexityIcon() }
-    ];
+    const engines = SEARCH_TARGETS.map((target) => ({
+      name: target.key,
+      label: target.label,
+      svg: getSearchTargetIcon(target.key)
+    }));
 
     engines.forEach((engine) => {
       const btn = document.createElement('button');
@@ -165,7 +185,7 @@ export function renderSearchRecommendations(newRecommendations) {
     const allBtn = document.createElement('button');
     allBtn.className = 'search-engine-btn all';
     allBtn.textContent = 'All';
-    allBtn.title = '모든 검색 엔진에서 검색';
+    allBtn.title = SEARCH_ALL_TARGET.label;
     allBtn.onclick = () => openAllSearchEngines(query);
     enginesEl.appendChild(allBtn);
 
@@ -187,42 +207,17 @@ export function resetSearchRecommendations() {
 }
 
 function openSearchResults(engine, query) {
-  const encodedQuery = encodeURIComponent(query);
-  let url = '';
-
-  switch (engine) {
-    case 'google':
-      url = `https://www.google.com/search?q=${encodedQuery}`;
-      break;
-    case 'naver':
-      url = `https://search.naver.com/search.naver?query=${encodedQuery}`;
-      break;
-    case 'bing':
-      url = `https://www.bing.com/search?q=${encodedQuery}`;
-      break;
-    case 'chatgpt':
-      url = `https://chat.openai.com/?q=${encodedQuery}`;
-      break;
-    case 'perplexity':
-      url = `https://www.perplexity.ai/search?q=${encodedQuery}`;
-      break;
-    default:
-      return;
+  const [url] = getSearchUrls(engine, query);
+  if (!url) {
+    return;
   }
 
   chrome.tabs.create({ url, active: false });
 }
 
 export function openAllSearchEngines(query) {
-  const encodedQuery = encodeURIComponent(query);
-  const urls = [
-    `https://www.google.com/search?q=${encodedQuery}`,
-    `https://search.naver.com/search.naver?query=${encodedQuery}`,
-    `https://www.bing.com/search?q=${encodedQuery}`,
-    `https://chat.openai.com/?q=${encodedQuery}`,
-    `https://www.perplexity.ai/search?q=${encodedQuery}`
-  ];
+  const urls = getSearchUrls(SEARCH_ALL_TARGET.key, query);
 
   urls.forEach((url) => chrome.tabs.create({ url, active: false }));
-  showToast(`"${query}"를 5개 검색 엔진에서 열었습니다!`);
+  showToast(`"${query}"를 ${urls.length}개 검색 엔진에서 열었습니다!`);
 }
