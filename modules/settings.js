@@ -10,6 +10,7 @@
 import { logInfo, logError, logDebug } from '../logger.js';
 import {
   getCurrentTabId,
+  getOriginalSettings,
   setOriginalSettings,
   setSettingsChanged
 } from './state.js';
@@ -22,15 +23,20 @@ import {
   saveExtensionSettings
 } from './storage.js';
 import { PROVIDER_CATALOG } from './provider-catalog.js';
+import { fetchOpenRouterKeyStatus } from './provider-client.js';
 
 const SIDE_PANEL_COMMAND_ID = 'open-side-panel';
 const SIDE_PANEL_SHORTCUT_FALLBACK = 'Ctrl+Shift+Y';
 const SIDE_PANEL_SHORTCUT_POLL_MS = 1200;
 const API_DELETE_CONFIRM_TIMEOUT_MS = 2500;
+const OPENROUTER_API_INPUT_ID = 'openRouterApiKey';
+const OPENROUTER_KEY_STATUS_DEBOUNCE_MS = 400;
 const PROVIDER_API_INPUT_IDS = Object.values(PROVIDER_CATALOG).map((provider) => provider.apiKeyStorageKey);
 let sidePanelShortcutPollTimer = null;
 let lastRenderedShortcutLabel = '';
 let lastRenderedShortcutAssigned = false;
+let openRouterKeyStatusTimer = null;
+let openRouterKeyStatusRequestId = 0;
 const providerDeleteConfirmTimers = new Map();
 
 /**
@@ -84,6 +90,8 @@ export function initSettingsTab() {
     input.addEventListener('change', handleSettingsFieldChanged);
   });
 
+  document.getElementById('openRouterKeyStatusRefreshBtn')?.addEventListener('click', handleOpenRouterKeyStatusRefresh);
+
   document.querySelectorAll('[data-action="clear-api-key"]').forEach((button) => {
     button.addEventListener('click', handleProviderApiKeyDelete);
   });
@@ -104,6 +112,11 @@ function handleSettingsFieldChanged(event) {
     const button = document.querySelector(`[data-action="clear-api-key"][data-target-input="${inputId}"]`);
     resetProviderApiDeleteButtonConfirm(button);
     syncProviderApiDeleteButtonState(inputId);
+  }
+
+  if (inputId === OPENROUTER_API_INPUT_ID) {
+    openRouterKeyStatusRequestId += 1;
+    scheduleOpenRouterKeyStatusRefresh();
   }
 
   setSettingsChanged(true);
@@ -128,6 +141,7 @@ export async function loadSettings() {
     setCheckboxValue('debugLog', formSettings.debugLog);
     syncAllProviderApiDeleteButtons();
     await updateApiKeyUI();
+    await refreshOpenRouterKeyStatus();
     await updateSidePanelShortcutUI();
 
     setSettingsChanged(false);
@@ -148,6 +162,167 @@ function setCheckboxValue(id, value) {
   const input = document.getElementById(id);
   if (input) {
     input.checked = Boolean(value);
+  }
+}
+
+function getOpenRouterKeyStatusElements() {
+  return {
+    container: document.getElementById('openRouterKeyStatus'),
+    text: document.getElementById('openRouterKeyStatusText'),
+    detail: document.getElementById('openRouterKeyStatusDetail'),
+    refreshButton: document.getElementById('openRouterKeyStatusRefreshBtn')
+  };
+}
+
+function setOpenRouterKeyStatusUI(state, text, detail = '') {
+  const elements = getOpenRouterKeyStatusElements();
+
+  if (!elements.container || !elements.text || !elements.detail) {
+    return;
+  }
+
+  elements.container.dataset.state = state;
+  elements.text.textContent = text;
+  if (elements.refreshButton) {
+    elements.refreshButton.disabled = state === 'loading';
+  }
+
+  if (detail) {
+    elements.detail.hidden = false;
+    elements.detail.textContent = detail;
+  } else {
+    elements.detail.hidden = true;
+    elements.detail.textContent = '';
+  }
+}
+
+function isFiniteNumber(value) {
+  return typeof value === 'number' && Number.isFinite(value);
+}
+
+function formatCreditValue(value) {
+  if (!isFiniteNumber(value)) {
+    return '확인 불가';
+  }
+
+  const absValue = Math.abs(value);
+  const maximumFractionDigits = absValue >= 100 ? 0 : absValue >= 1 ? 2 : absValue >= 0.1 ? 3 : 4;
+
+  return new Intl.NumberFormat('ko-KR', {
+    minimumFractionDigits: 0,
+    maximumFractionDigits
+  }).format(value);
+}
+
+function clearOpenRouterKeyStatusTimer() {
+  if (!openRouterKeyStatusTimer) {
+    return;
+  }
+
+  window.clearTimeout(openRouterKeyStatusTimer);
+  openRouterKeyStatusTimer = null;
+}
+
+function scheduleOpenRouterKeyStatusRefresh({ immediate = false } = {}) {
+  clearOpenRouterKeyStatusTimer();
+
+  if (immediate) {
+    void refreshOpenRouterKeyStatus();
+    return;
+  }
+
+  openRouterKeyStatusTimer = window.setTimeout(() => {
+    openRouterKeyStatusTimer = null;
+    void refreshOpenRouterKeyStatus();
+  }, OPENROUTER_KEY_STATUS_DEBOUNCE_MS);
+}
+
+function handleOpenRouterKeyStatusRefresh() {
+  scheduleOpenRouterKeyStatusRefresh({ immediate: true });
+}
+
+function renderOpenRouterKeyStatusSuccess(keyStatus) {
+  const keyName = resolveOpenRouterKeyDisplayName(keyStatus);
+  const summaryPrefix = keyName ? `${keyName} · ` : '';
+  const summary = isFiniteNumber(keyStatus.limitRemaining)
+    ? `${summaryPrefix}남은 크레딧 ${formatCreditValue(keyStatus.limitRemaining)}`
+    : `${summaryPrefix}현재 키 한도: 무제한`;
+
+  const detailParts = [];
+
+  if (isFiniteNumber(keyStatus.usageDaily)) {
+    detailParts.push(`오늘 사용 ${formatCreditValue(keyStatus.usageDaily)} 크레딧`);
+  }
+
+  if (isFiniteNumber(keyStatus.usage)) {
+    detailParts.push(`누적 사용 ${formatCreditValue(keyStatus.usage)} 크레딧`);
+  }
+
+  setOpenRouterKeyStatusUI('success', summary, detailParts.join(' · '));
+}
+
+function resolveOpenRouterKeyDisplayName(keyStatus) {
+  const preferredName = String(keyStatus?.name || '').trim();
+  if (preferredName) {
+    return preferredName;
+  }
+
+  const fallbackLabel = String(keyStatus?.label || '').trim();
+  if (!fallbackLabel) {
+    return '';
+  }
+
+  if (/^sk-or-v1-/i.test(fallbackLabel)) {
+    return '';
+  }
+
+  return fallbackLabel;
+}
+
+async function refreshOpenRouterKeyStatus() {
+  clearOpenRouterKeyStatusTimer();
+
+  const currentKey = getInputValue(OPENROUTER_API_INPUT_ID);
+  const savedKey = String(getOriginalSettings()?.openRouterApiKey || '').trim();
+
+  if (!currentKey && !savedKey) {
+    setOpenRouterKeyStatusUI('idle', 'OpenRouter API Key를 저장하면 현재 키 한도를 보여드립니다.');
+    return;
+  }
+
+  if (currentKey !== savedKey) {
+    const draftMessage = currentKey
+      ? '저장 전입니다. 저장하면 새 OpenRouter API Key 기준으로 한도를 조회합니다.'
+      : '저장 전입니다. 저장하면 OpenRouter API Key가 제거됩니다.';
+    setOpenRouterKeyStatusUI('draft', draftMessage);
+    return;
+  }
+
+  if (!savedKey) {
+    setOpenRouterKeyStatusUI('idle', '저장된 OpenRouter API Key가 없습니다.');
+    return;
+  }
+
+  const requestId = ++openRouterKeyStatusRequestId;
+  setOpenRouterKeyStatusUI('loading', '현재 OpenRouter API Key 한도를 확인하는 중...');
+
+  try {
+    const keyStatus = await fetchOpenRouterKeyStatus(savedKey);
+
+    if (requestId !== openRouterKeyStatusRequestId) {
+      return;
+    }
+
+    renderOpenRouterKeyStatusSuccess(keyStatus);
+  } catch (error) {
+    if (requestId !== openRouterKeyStatusRequestId) {
+      return;
+    }
+
+    setOpenRouterKeyStatusUI('error', `현재 키 상태를 불러오지 못했습니다. ${error.message}`);
+    logDebug('sidepanel', 'OPENROUTER_KEY_STATUS_FETCH_FAILED', 'OpenRouter 키 상태 조회 실패', {
+      reason: error?.message || '알 수 없음'
+    }, error);
   }
 }
 
@@ -175,6 +350,7 @@ export async function handleSaveSettings() {
     hideSaveBar();
     await updateApiKeyUI();
     syncAllProviderApiDeleteButtons();
+    await refreshOpenRouterKeyStatus();
     await refreshTranslationConfigUI();
 
     showToast('설정이 저장되었습니다!');

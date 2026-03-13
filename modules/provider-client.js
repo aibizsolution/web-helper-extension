@@ -38,6 +38,47 @@ export function normalizeError(error, provider = DEFAULT_PROVIDER) {
   return Object.assign(new Error(message), { status, provider });
 }
 
+/**
+ * OpenRouter 현재 API Key 상태를 조회한다.
+ * @param {string} apiKey - OpenRouter API Key
+ * @returns {Promise<object>} 키 상태 정보
+ */
+export async function fetchOpenRouterKeyStatus(apiKey) {
+  const normalizedApiKey = String(apiKey || '').trim();
+
+  if (!normalizedApiKey) {
+    throw new Error('OpenRouter API Key를 먼저 입력해주세요.');
+  }
+
+  try {
+    const response = await fetch('https://openrouter.ai/api/v1/key', {
+      method: 'GET',
+      headers: {
+        Authorization: `Bearer ${normalizedApiKey}`
+      }
+    });
+
+    const payload = await parseResponseOrThrow(response, 'OpenRouter 키 상태 조회 실패');
+    const data = payload?.data || {};
+
+    return {
+      name: data?.name || '',
+      label: data?.label || '',
+      limit: typeof data?.limit === 'number' ? data.limit : null,
+      limitRemaining: typeof data?.limit_remaining === 'number' ? data.limit_remaining : null,
+      limitReset: data?.limit_reset || null,
+      usage: typeof data?.usage === 'number' ? data.usage : null,
+      usageDaily: typeof data?.usage_daily === 'number' ? data.usage_daily : null,
+      usageWeekly: typeof data?.usage_weekly === 'number' ? data.usage_weekly : null,
+      usageMonthly: typeof data?.usage_monthly === 'number' ? data.usage_monthly : null,
+      includeByokInLimit: data?.include_byok_in_limit === true,
+      isFreeTier: data?.is_free_tier === true
+    };
+  } catch (error) {
+    throw normalizeError(error, 'OpenRouter');
+  }
+}
+
 async function executeWithRetry(task) {
   let lastError = null;
 

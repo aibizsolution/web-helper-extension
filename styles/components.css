@@ -840,6 +840,112 @@
       box-shadow: 0 0 0 3px rgba(42, 108, 240, 0.1);
     }
 
+    .settings-provider-meta {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      padding: 10px 12px;
+      border-radius: 12px;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      background: rgba(255, 255, 255, 0.03);
+    }
+
+    .settings-provider-meta[data-state="loading"] {
+      border-color: rgba(42, 108, 240, 0.24);
+      background: rgba(42, 108, 240, 0.08);
+    }
+
+    .settings-provider-meta[data-state="success"] {
+      border-color: rgba(74, 222, 128, 0.22);
+      background: rgba(22, 101, 52, 0.14);
+    }
+
+    .settings-provider-meta[data-state="error"] {
+      border-color: rgba(239, 68, 68, 0.22);
+      background: rgba(127, 29, 29, 0.14);
+    }
+
+    .settings-provider-meta[data-state="draft"] {
+      border-color: rgba(250, 204, 21, 0.2);
+      background: rgba(113, 63, 18, 0.14);
+    }
+
+    .settings-provider-meta-head {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      align-items: start;
+      gap: 10px;
+    }
+
+    .settings-provider-meta-text {
+      font-size: 12px;
+      font-weight: 600;
+      line-height: 1.45;
+      color: var(--text-secondary);
+    }
+
+    .settings-provider-meta[data-state="success"] .settings-provider-meta-text {
+      color: #bbf7d0;
+    }
+
+    .settings-provider-meta[data-state="error"] .settings-provider-meta-text {
+      color: #fecaca;
+    }
+
+    .settings-provider-meta[data-state="loading"] .settings-provider-meta-text {
+      color: #bfdbfe;
+    }
+
+    .settings-provider-meta[data-state="draft"] .settings-provider-meta-text {
+      color: #fde68a;
+    }
+
+    .settings-provider-meta-detail {
+      font-size: 11px;
+      line-height: 1.45;
+      color: var(--text-muted);
+    }
+
+    .settings-provider-refresh-btn {
+      width: 28px;
+      height: 28px;
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.05);
+      border-color: rgba(255, 255, 255, 0.1);
+      color: var(--text-secondary);
+      flex-shrink: 0;
+    }
+
+    .settings-provider-refresh-btn:hover:not(:disabled) {
+      background: rgba(42, 108, 240, 0.14);
+      border-color: rgba(42, 108, 240, 0.36);
+      color: #bfdbfe;
+    }
+
+    .settings-provider-refresh-btn:disabled {
+      opacity: 0.6;
+      cursor: wait;
+    }
+
+    .settings-provider-refresh-btn svg {
+      width: 16px;
+      height: 16px;
+    }
+
+    .settings-provider-meta[data-state="loading"] .settings-provider-refresh-btn svg {
+      animation: settings-spin 0.9s linear infinite;
+    }
+
+    @keyframes settings-spin {
+      from {
+        transform: rotate(0deg);
+      }
+
+      to {
+        transform: rotate(360deg);
+      }
+    }
+
     .settings-provider-delete-btn {
       min-width: 48px;
       min-height: 28px;

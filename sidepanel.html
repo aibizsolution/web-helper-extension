@@ -576,6 +576,23 @@
                   </div>
                 </div>
                 <input type="password" id="openRouterApiKey" placeholder="sk-or-v1-..." autocomplete="off">
+                <div id="openRouterKeyStatus" class="settings-provider-meta" data-state="idle" role="status" aria-live="polite">
+                  <div class="settings-provider-meta-head">
+                    <div id="openRouterKeyStatusText" class="settings-provider-meta-text">OpenRouter API Key를 저장하면 현재 키 한도를 보여드립니다.</div>
+                    <button
+                      type="button"
+                      id="openRouterKeyStatusRefreshBtn"
+                      class="settings-provider-refresh-btn icon-btn"
+                      aria-label="OpenRouter 키 한도 새로고침"
+                      title="OpenRouter 키 한도 새로고침"
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" aria-hidden="true">
+                        <path d="M12 4a8 8 0 0 1 7.75 6h-2.3A6 6 0 1 0 18 14h2a8 8 0 1 1-2.34-5.66L15 11h7V4l-2.58 2.58A9.95 9.95 0 0 0 12 4z"/>
+                      </svg>
+                    </button>
+                  </div>
+                  <div id="openRouterKeyStatusDetail" class="settings-provider-meta-detail" hidden></div>
+                </div>
               </div>
 
               <div class="settings-provider-item">

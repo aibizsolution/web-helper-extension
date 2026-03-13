@@ -1,6 +1,7 @@
 # 변경 기록
 
 ## 2026-03-13
+- 설정 탭의 OpenRouter API Key 입력 아래에 현재 저장된 키 기준 `남은 크레딧 / 오늘 사용 / 누적 사용` 상태를 바로 보여주고, 우측 새로고침 버튼으로 수동 재조회할 수 있게 추가했다. 키 이름은 응답에 실제 이름 필드가 있을 때만 표시한다.
 - content script에서 shared GEO 모듈을 동적 import할 수 있도록 `modules/*.js`를 web-accessible resource로 열어, client audit 최적화 경로가 실제 확장 런타임에서도 동작하게 조정했다.
 - 페이지 진단 client audit는 가능하면 현재 탭 안에서 바로 실행해 결과 객체만 전달하고, 구버전 content script 탭에서는 기존 HTML 스냅샷 방식으로 fallback 하도록 최적화했다.
 - 페이지 진단 Dual Audit가 시작한 탭과 URL을 끝까지 고정해서, 검사 중 탭 전환이나 페이지 변경으로 봇/브라우저 결과가 섞이지 않도록 보강했다.
