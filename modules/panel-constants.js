@@ -1,6 +1,6 @@
 export const PANEL_SESSION_KEY = 'lastActiveTab';
 
-export const GITHUB_REPO_URL = 'https://github.com/park-youngtack/chrome_ext_yt_ai';
+export const GITHUB_REPO_URL = 'https://github.com/aibizsolution/web-helper-extension';
 
 export const DEFAULT_MAIN_TAB = 'translate';
 export const DEFAULT_TRANSLATE_PANEL = 'page';
