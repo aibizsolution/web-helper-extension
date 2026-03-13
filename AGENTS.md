@@ -16,6 +16,7 @@
 - `검색`
   - 검색문 추천 및 다중 검색 엔진 열기
 - `페이지 진단`
+  - AI 해석은 `OpenRouter + openai/gpt-5-mini` 고정 모델 사용
   - 검색/AI 노출 관점의 페이지 점검
 - `도구`
   - 브라우저 캐시/사이트 데이터 정리
@@ -143,6 +144,8 @@ chrome_ext_yt_ai/
 - 사이드패널은 `window-level`, 번역 상태는 `tab-level`로 관리
 - 확장 업데이트 직후 열린 탭에는 구버전 content script가 남을 수 있어 새로고침이 필요할 수 있음
 - 브라우저 테스트는 사용자가 명시적으로 요청할 때만 진행
+- `Playwright MCP` 브라우저는 `chrome://`, `chrome-extension://`, `file://` 접근이 막혀 있어 확장 자체의 실제 UI/사이드패널 테스트 용도로 바로 쓰지 않는다
+- 확장 실기동 검증이 필요하면 `Playwright MCP`로 먼저 제한 여부만 확인하고, 실제 테스트는 로컬 `playwright` 스크립트에서 `chromium.launchPersistentContext + --disable-extensions-except + --load-extension` 조합으로 unpacked 확장을 로드해 진행한다
 - 릴리스 전 `manifest.json` 버전과 `meta.js` 날짜를 함께 확인
 - 큰 구조 변경이 있으면 `README.md`와 `AGENTS.md`를 같이 갱신
 - UI 기준은 `모바일 대응`이 아니라 `데스크톱 Chrome 사이드패널 폭`

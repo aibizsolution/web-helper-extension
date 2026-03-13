@@ -188,6 +188,24 @@ export async function getActiveTranslationConfig() {
 }
 
 /**
+ * 페이지 진단용 고정 AI 구성(OpenRouter + GPT-5 mini)을 반환한다.
+ * 번역 탭의 현재 provider/model 설정과 분리해서 일관된 해석을 제공한다.
+ * @returns {Promise<object>} 페이지 진단 AI 구성
+ */
+export async function getGeoAuditConfig() {
+  const settings = await getExtensionSettings();
+  const apiKey = (settings.openRouterApiKey || '').trim();
+
+  return {
+    provider: 'openrouter',
+    providerLabel: 'OpenRouter',
+    model: 'openai/gpt-5-mini',
+    apiKey,
+    hasApiKey: Boolean(apiKey)
+  };
+}
+
+/**
  * 특정 프로바이더의 API 키를 조회한다.
  * @param {string} providerId - 프로바이더 ID
  * @returns {Promise<string>} API 키

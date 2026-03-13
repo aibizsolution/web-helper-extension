@@ -40,7 +40,7 @@ import {
 } from './provider-catalog.js';
 import { getActiveTranslationConfig, getConfiguredProviders, updateActiveTranslationConfig } from './storage.js';
 
-const EXPECTED_CONTENT_RUNTIME_VERSION = '2026-03-12-content-v3';
+const EXPECTED_CONTENT_RUNTIME_VERSION = '2026-03-13-content-v4';
 
 function currentTabIdValue() {
   return getCurrentTabId();

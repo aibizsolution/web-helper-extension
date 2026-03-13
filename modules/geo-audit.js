@@ -12,9 +12,240 @@
  * 3. getImprovement() → LLM 의견 수집
  */
 
-import { GEO_CHECKLIST, groupChecklistByCategory, calculateTotalWeights } from './geo-checklist.js';
-import { getActiveTranslationConfig } from './storage.js';
+import { GEO_CHECKLIST, detectGeoPageProfile, matchGeoProfiles } from './geo-checklist.js';
+import { ACTIONS } from './constants.js';
+import { getGeoAuditConfig } from './storage.js';
 import { runPrompt } from './provider-client.js';
+
+const CRITICAL_FAILURE_IDS = [
+  'title_tag',
+  'meta_description',
+  'structured_data',
+  'og_title',
+  'og_description',
+  'og_image',
+  'twitter_card',
+  'faq_schema',
+  'author_info',
+  'publish_date',
+  'source_attribution',
+  'breadcrumb_schema'
+];
+
+const LOW_SIGNAL_DIFFERENCE_IDS = ['media_queries'];
+
+const PRIORITY_ORDER_BY_PROFILE = {
+  generic: [
+    'structured_data',
+    'og_title',
+    'og_description',
+    'og_image',
+    'twitter_card',
+    'clear_summary',
+    'breadcrumb_schema',
+    'faq_schema'
+  ],
+  article: [
+    'structured_data',
+    'author_info',
+    'publish_date',
+    'source_attribution',
+    'og_title',
+    'og_description',
+    'og_image',
+    'twitter_card',
+    'breadcrumb_schema',
+    'faq_schema'
+  ],
+  product: [
+    'structured_data',
+    'og_title',
+    'og_description',
+    'og_image',
+    'twitter_card',
+    'faq_schema',
+    'clear_summary',
+    'breadcrumb_schema'
+  ],
+  landing: [
+    'og_title',
+    'og_description',
+    'og_image',
+    'twitter_card',
+    'structured_data',
+    'clear_summary',
+    'faq_schema'
+  ],
+  login: [
+    'title_tag',
+    'meta_description',
+    'h1_tag'
+  ]
+};
+
+const KEY_SIGNAL_IDS = [
+  'title_tag',
+  'meta_description',
+  'h1_tag',
+  'structured_data',
+  'clear_summary',
+  'headings_structure'
+];
+
+const SEVERITY_COPY = {
+  critical: '위험',
+  weak: '부족',
+  fair: '보통',
+  strong: '양호'
+};
+
+function normalizeAuditInput(input) {
+  if (input?.botResult && input?.clientResult) {
+    return {
+      primaryResult: input.botResult,
+      secondaryResult: input.clientResult,
+      differences: Array.isArray(input.differences) ? input.differences : []
+    };
+  }
+
+  return {
+    primaryResult: input,
+    secondaryResult: null,
+    differences: []
+  };
+}
+
+function getSeverityFromScores(scores = {}) {
+  const total = Number(scores.total || 0);
+  const categoryValues = ['seo', 'aeo', 'geo']
+    .map((key) => scores[key])
+    .filter((value) => Number.isFinite(value));
+  const minCategory = categoryValues.length > 0 ? Math.min(...categoryValues) : total;
+
+  if (total < 40 || minCategory < 25) {
+    return 'critical';
+  }
+
+  if (total < 60 || minCategory < 45) {
+    return 'weak';
+  }
+
+  if (total < 80 || minCategory < 65) {
+    return 'fair';
+  }
+
+  return 'strong';
+}
+
+function getWeakCategories(scores = {}) {
+  return [
+    { key: 'seo', label: '검색 기본요소', score: Number.isFinite(scores.seo) ? Number(scores.seo) : null },
+    { key: 'aeo', label: 'AI 답변 기본요소', score: Number.isFinite(scores.aeo) ? Number(scores.aeo) : null },
+    { key: 'geo', label: 'AI 노출 기본요소', score: Number.isFinite(scores.geo) ? Number(scores.geo) : null }
+  ]
+    .filter((item) => Number.isFinite(item.score) && item.score < 45)
+    .sort((left, right) => left.score - right.score);
+}
+
+function getPriorityFailures(results = [], pageProfileType = 'generic') {
+  const profileOrder = PRIORITY_ORDER_BY_PROFILE[pageProfileType] || CRITICAL_FAILURE_IDS;
+  return results
+    .filter((item) => item && item.applicable !== false && item.passed === false)
+    .sort((left, right) => {
+      const leftPriority = profileOrder.indexOf(left.id);
+      const rightPriority = profileOrder.indexOf(right.id);
+      const normalizedLeft = leftPriority === -1 ? Number.MAX_SAFE_INTEGER : leftPriority;
+      const normalizedRight = rightPriority === -1 ? Number.MAX_SAFE_INTEGER : rightPriority;
+
+      if (normalizedLeft !== normalizedRight) {
+        return normalizedLeft - normalizedRight;
+      }
+
+      const leftCritical = CRITICAL_FAILURE_IDS.indexOf(left.id);
+      const rightCritical = CRITICAL_FAILURE_IDS.indexOf(right.id);
+      const normalizedLeftCritical = leftCritical === -1 ? Number.MAX_SAFE_INTEGER : leftCritical;
+      const normalizedRightCritical = rightCritical === -1 ? Number.MAX_SAFE_INTEGER : rightCritical;
+
+      if (normalizedLeftCritical !== normalizedRightCritical) {
+        return normalizedLeftCritical - normalizedRightCritical;
+      }
+
+      return (right.weight || 0) - (left.weight || 0);
+    });
+}
+
+function getPassedSignals(results = []) {
+  return results
+    .filter((item) => item && item.applicable !== false && item.passed === true && KEY_SIGNAL_IDS.includes(item.id))
+    .map((item) => item.title);
+}
+
+function formatScoreForPrompt(value) {
+  return Number.isFinite(value) ? `${value}` : '해당 없음';
+}
+
+function formatScoreLabel(value) {
+  return Number.isFinite(value) ? `${value}/100` : '해당 없음';
+}
+
+function getDifferenceSummary(differences = [], scoreGap) {
+  const diffCount = differences.length;
+  if (!diffCount) {
+    return '봇과 브라우저 결과 차이는 없습니다.';
+  }
+
+  const lowSignalOnly = differences.every((difference) => LOW_SIGNAL_DIFFERENCE_IDS.includes(difference.id));
+  if (lowSignalOnly && scoreGap <= 3) {
+    return '반응형 스타일처럼 낮은 우선순위 항목에서만 작은 차이가 있습니다. 메타나 구조 신호보다 영향이 작습니다.';
+  }
+
+  if (diffCount === 1 && scoreGap <= 3) {
+    return '봇과 브라우저 차이는 작습니다. 일부 요소만 JS 실행 후에 보입니다.';
+  }
+
+  if (diffCount <= 2 && scoreGap <= 7) {
+    return '봇과 브라우저에 작은 차이가 있습니다. 일부 요소가 초기 HTML에 바로 노출되지 않습니다.';
+  }
+
+  if (diffCount <= 4 && scoreGap <= 15) {
+    return '초기 HTML과 브라우저 결과 차이가 눈에 띕니다. 일부 핵심 요소가 JS 실행 후에만 보일 수 있습니다.';
+  }
+
+  return '초기 HTML과 브라우저 차이가 큽니다. 렌더링 의존도가 높아 검색봇이 핵심 요소를 놓칠 가능성이 있습니다.';
+}
+
+export function buildAuditAssessment(input) {
+  const { primaryResult, secondaryResult, differences } = normalizeAuditInput(input);
+  const primaryScores = primaryResult?.scores || {};
+  const secondaryScores = secondaryResult?.scores || {};
+  const diffCount = differences.length;
+  const scoreGap = secondaryResult
+    ? Math.abs(Number(secondaryScores.total || 0) - Number(primaryScores.total || 0))
+    : 0;
+  const severity = getSeverityFromScores(primaryScores);
+  const weakCategories = getWeakCategories(primaryScores);
+  const priorityFailures = getPriorityFailures(primaryResult?.results || [], primaryResult?.pageProfile?.type);
+  const passedSignals = getPassedSignals(primaryResult?.results || []);
+  const hasOnlyLowSignalDifferences = diffCount > 0 && differences.every((difference) => LOW_SIGNAL_DIFFERENCE_IDS.includes(difference.id));
+
+  return {
+    severity,
+    severityLabel: SEVERITY_COPY[severity],
+    primaryResult,
+    secondaryResult,
+    differences,
+    diffCount,
+    scoreGap,
+    weakCategories,
+    differenceSummary: getDifferenceSummary(differences, scoreGap),
+    priorityFailures,
+    passedSignals,
+    pageProfile: primaryResult?.pageProfile || null,
+    skippedCount: Number(primaryResult?.skippedCount || 0),
+    applicableCount: Number(primaryResult?.applicableCount || 0),
+    hasOnlyLowSignalDifferences
+  };
+}
 
 /**
  * @typedef {Object} AuditResult
@@ -88,23 +319,42 @@ import { runPrompt } from './provider-client.js';
  * console.log(`AEO: ${auditResult.scores.aeo}`);
  * console.log(`GEO: ${auditResult.scores.geo}`);
  */
-export async function runAudit(doc = document) {
+export async function runAudit(doc = document, context = {}) {
   const results = [];
   let passedCount = 0;
   let failedCount = 0;
+  let skippedCount = 0;
+  const pageProfile = detectGeoPageProfile(doc, context);
 
   // 체크리스트 순회 (자동, if 없음)
   for (const checkItem of GEO_CHECKLIST) {
+    const applicable = matchGeoProfiles(pageProfile, checkItem.profiles);
+
+    if (!applicable) {
+      results.push({
+        id: checkItem.id,
+        title: checkItem.title,
+        category: checkItem.category,
+        weight: checkItem.weight,
+        passed: null,
+        applicable: false,
+        skipped: true,
+        hint: '현재 페이지 유형에서는 점수에서 제외됩니다.'
+      });
+      skippedCount++;
+      continue;
+    }
+
     try {
       // 1. selector 실행 → DOM 요소 또는 데이터 추출
-      const selected = checkItem.selector(doc);
+      const selected = checkItem.selector(doc, pageProfile);
 
       // 2. validator 실행 → pass/fail 결정
-      const passed = checkItem.validator(selected);
+      const passed = checkItem.validator(selected, doc, pageProfile, checkItem);
 
       // 3. 결과 기록
       // hint가 함수이면 실행, 문자열이면 그대로 사용
-      const hint = typeof checkItem.hint === 'function' ? checkItem.hint(doc) : checkItem.hint;
+      const hint = typeof checkItem.hint === 'function' ? checkItem.hint(doc, selected, pageProfile) : checkItem.hint;
 
       results.push({
         id: checkItem.id,
@@ -112,6 +362,8 @@ export async function runAudit(doc = document) {
         category: checkItem.category,
         weight: checkItem.weight,
         passed,
+        applicable: true,
+        skipped: false,
         hint
       });
 
@@ -121,7 +373,7 @@ export async function runAudit(doc = document) {
     } catch (error) {
       // selector/validator 에러는 fail 처리
       // hint가 함수이면 실행, 문자열이면 그대로 사용
-      const hint = typeof checkItem.hint === 'function' ? checkItem.hint(doc) : checkItem.hint;
+      const hint = typeof checkItem.hint === 'function' ? checkItem.hint(doc, null, pageProfile) : checkItem.hint;
 
       results.push({
         id: checkItem.id,
@@ -129,6 +381,8 @@ export async function runAudit(doc = document) {
         category: checkItem.category,
         weight: checkItem.weight,
         passed: false,
+        applicable: true,
+        skipped: false,
         hint,
         error: error.message
       });
@@ -144,7 +398,10 @@ export async function runAudit(doc = document) {
     scores,
     passedCount,
     failedCount,
-    failedItems: results.filter(r => !r.passed).map(r => r.id),
+    skippedCount,
+    applicableCount: results.filter((result) => result.applicable !== false).length,
+    failedItems: results.filter(r => r.applicable !== false && r.passed === false).map(r => r.id),
+    pageProfile,
     timestamp: new Date().toISOString()
   };
 }
@@ -167,184 +424,308 @@ export async function runAudit(doc = document) {
  * console.log(scores); // { seo: 85, aeo: 90, geo: 78, total: 84 }
  */
 export function calculateScores(results) {
-  const weights = calculateTotalWeights();
-  const grouped = groupChecklistByCategory();
-
-  // 카테고리별 획득 점수 계산
   const categoryScores = {};
-  Object.keys(grouped).forEach(category => {
-    const categoryItems = results.filter(r => r.category === category);
+  const applicableWeights = {};
+
+  ['seo', 'aeo', 'geo'].forEach((category) => {
+    const categoryItems = results.filter((result) => result.category === category && result.applicable !== false);
+    const totalWeight = categoryItems.reduce((sum, result) => sum + Number(result.weight || 0), 0);
     const earnedWeight = categoryItems
-      .filter(r => r.passed)
-      .reduce((sum, r) => sum + r.weight, 0);
-    const totalWeight = weights[category];
-    categoryScores[category] = Math.round((earnedWeight / totalWeight) * 100);
+      .filter((result) => result.passed === true)
+      .reduce((sum, result) => sum + Number(result.weight || 0), 0);
+
+    applicableWeights[category] = totalWeight;
+    categoryScores[category] = totalWeight > 0
+      ? Math.round((earnedWeight / totalWeight) * 100)
+      : null;
   });
 
-  // 총점 = 모든 카테고리 평균
-  const categories = Object.keys(categoryScores);
-  const totalScore = Math.round(
-    categories.reduce((sum, cat) => sum + categoryScores[cat], 0) / categories.length
-  );
+  const numericScores = Object.values(categoryScores).filter((score) => Number.isFinite(score));
+  const totalScore = numericScores.length > 0
+    ? Math.round(numericScores.reduce((sum, score) => sum + score, 0) / numericScores.length)
+    : 0;
 
   return {
-    seo: categoryScores.seo || 0,
-    aeo: categoryScores.aeo || 0,
-    geo: categoryScores.geo || 0,
-    total: totalScore
+    seo: categoryScores.seo,
+    aeo: categoryScores.aeo,
+    geo: categoryScores.geo,
+    total: totalScore,
+    applicableWeights
   };
 }
 
-/**
- * 강점 분석 (통과한 항목 칭찬)
- *
- * @param {AuditResult} auditResult - 검사 결과
- * @returns {Promise<string>} 전체 텍스트
- */
-export async function getStrengths(auditResult) {
-  const config = await getActiveTranslationConfig();
-  if (!config.hasApiKey) throw new Error('API Key가 설정되지 않았습니다');
+function extractJsonPayload(text) {
+  const raw = String(text || '').trim();
+  if (!raw) {
+    return null;
+  }
 
-  const passedItems = auditResult.results
-    .filter(r => r.passed)
-    .map(r => `- ${r.title}`)
-    .join('\n');
+  const fenced = raw.match(/```(?:json)?\s*([\s\S]*?)```/i);
+  const candidate = (fenced?.[1] || raw).trim();
+  const start = candidate.indexOf('{');
+  const end = candidate.lastIndexOf('}');
 
-  const prompt = `당신은 친절한 웹사이트 컨설턴트입니다. 다음은 GEO 검사에서 통과한 항목들입니다.
+  if (start === -1 || end === -1 || end <= start) {
+    return null;
+  }
 
-## 통과한 항목
-${passedItems}
+  try {
+    return JSON.parse(candidate.slice(start, end + 1));
+  } catch (_) {
+    return null;
+  }
+}
 
-## 요청
-위 항목들을 보고 **2-3문장으로 긍정적으로 칭찬**해주세요.
+function normalizeString(value) {
+  return typeof value === 'string' ? value.trim() : '';
+}
 
-예시:
-"현재 페이지 제목과 메타 설명이 이미 잘 최적화되어 있네요! 👍 특히 Open Graph 태그가 완벽하게 설정되어 있어 소셜 미디어 공유 시 멋지게 보일 거예요."
+function normalizeStringList(value, maxItems = 3) {
+  if (!Array.isArray(value)) {
+    return [];
+  }
 
-## 규칙
-- 마크다운 형식
-- 2-3문장
-- 긍정적이고 격려하는 톤
-- 한국어`;
+  return value
+    .map((item) => normalizeString(item))
+    .filter(Boolean)
+    .slice(0, maxItems);
+}
 
-  return await fetchLLM(prompt, config);
+function parseExecutiveSummaryResponse(text) {
+  const parsed = extractJsonPayload(text);
+  if (!parsed) {
+    return { rawText: String(text || '').trim() };
+  }
+
+  return {
+    statusLine: normalizeString(parsed.statusLine),
+    causes: normalizeStringList(parsed.causes, 3),
+    differenceInterpretation: normalizeString(parsed.differenceInterpretation),
+    rawText: String(text || '').trim()
+  };
+}
+
+function parsePriorityActionsResponse(text) {
+  const parsed = extractJsonPayload(text);
+  if (!parsed || !Array.isArray(parsed.actions)) {
+    return { rawText: String(text || '').trim(), actions: [] };
+  }
+
+  return {
+    actions: parsed.actions
+      .map((action) => ({
+        title: normalizeString(action?.title),
+        reason: normalizeString(action?.reason),
+        tasks: normalizeStringList(action?.tasks, 3),
+        whyNow: normalizeString(action?.whyNow)
+      }))
+      .filter((action) => action.title)
+      .slice(0, 3),
+    rawText: String(text || '').trim()
+  };
+}
+
+function parseExecutionPlanResponse(text) {
+  const parsed = extractJsonPayload(text);
+  if (!parsed) {
+    return { rawText: String(text || '').trim() };
+  }
+
+  return {
+    today: normalizeStringList(parsed.today, 2),
+    thisWeek: normalizeStringList(parsed.thisWeek, 2),
+    later: normalizeStringList(parsed.later, 2),
+    rawText: String(text || '').trim()
+  };
+}
+
+function buildExecutionPlanSeed(assessment) {
+  const failedIds = new Set(assessment.priorityFailures.map((item) => item.id));
+  const today = [];
+  const thisWeek = [];
+  const later = [];
+  const pageType = assessment.pageProfile?.type || 'generic';
+
+  const hasAny = (ids) => ids.some((id) => failedIds.has(id));
+  const addUnique = (target, text) => {
+    if (text && !target.includes(text) && target.length < 2) {
+      target.push(text);
+    }
+  };
+
+  const hasMetaSet = hasAny(['og_title', 'og_description', 'og_image', 'twitter_card']);
+  const hasStructuredTrustSet = hasAny(['structured_data', 'author_info', 'publish_date']);
+  const hasTrustContextSet = hasAny(['source_attribution', 'breadcrumb_schema', 'faq_schema']);
+
+  if (hasMetaSet) {
+    addUnique(today, 'OG/Twitter 메타 태그를 서버 HTML <head> 기준으로 한 번에 정리합니다.');
+  }
+
+  if (hasStructuredTrustSet) {
+    const structuredCopy = pageType === 'article'
+      ? 'Article JSON-LD에 저자·발행일을 함께 묶어 반영합니다.'
+      : '페이지 유형에 맞는 JSON-LD 구조화 데이터를 기본 필드와 함께 반영합니다.';
+    addUnique(hasMetaSet ? thisWeek : today, structuredCopy);
+  }
+
+  if (pageType === 'article' && failedIds.has('source_attribution')) {
+    addUnique(thisWeek, '이미지·인용구 출처 표기 기준을 정리하고 본문 템플릿에 반영합니다.');
+  }
+
+  if (failedIds.has('faq_schema')) {
+    addUnique(later, 'FAQ가 실제로 필요한 페이지에만 FAQ Schema를 선택적으로 추가합니다.');
+  }
+
+  if (failedIds.has('breadcrumb_schema')) {
+    addUnique(later, 'Breadcrumb Schema를 템플릿 단위로 추가해 탐색 구조를 명확히 합니다.');
+  }
+
+  if (today.length === 0) {
+    addUnique(today, '핵심 메타와 제목 체계를 먼저 정리해 기본 노출 신호를 안정화합니다.');
+  }
+
+  if (thisWeek.length === 0 && hasAny(['title_tag', 'meta_description', 'h1_tag', 'headings_structure', 'clear_summary'])) {
+    addUnique(thisWeek, '본문 첫 요약과 제목 구조를 다듬어 검색·AI 해석 품질을 보강합니다.');
+  }
+
+  if (later.length === 0) {
+    addUnique(later, '배포 후 봇 HTML과 실제 브라우저 결과를 다시 비교해 남은 차이를 점검합니다.');
+  }
+
+  return { today, thisWeek, later };
 }
 
 /**
- * 개선사항 분석 (실패 항목 TOP 3)
+ * 현황 해석 생성
  *
- * @param {AuditResult} auditResult - 검사 결과
- * @returns {Promise<string>} 전체 텍스트
+ * @param {AuditResult|object} auditInput - 검사 결과 또는 dual audit 결과
+ * @returns {Promise<object>} 구조화된 현황 해석
  */
-export async function getImprovements(auditResult) {
-  const config = await getActiveTranslationConfig();
-  if (!config.hasApiKey) throw new Error('API Key가 설정되지 않았습니다');
+export async function getExecutiveSummary(auditInput) {
+  const config = await getGeoAuditConfig();
+  if (!config.hasApiKey) throw new Error('페이지 진단 AI 해석에는 OpenRouter API Key가 필요합니다.');
 
-  const failedItems = auditResult.results
-    .filter(r => !r.passed)
-    .map(r => `- ${r.title}: ${r.hint}`)
-    .join('\n');
+  const assessment = buildAuditAssessment(auditInput);
+  const primaryScores = assessment.primaryResult?.scores || {};
+  const weakCategoryText = assessment.weakCategories.length
+    ? assessment.weakCategories.map((item) => `${item.label} ${item.score}점`).join(', ')
+    : '없음';
+  const priorityFailureText = assessment.priorityFailures
+    .slice(0, 5)
+    .map((item) => `- ${item.title} (${item.category.toUpperCase()}, ${item.weight}pt): ${item.hint}`)
+    .join('\n') || '- 없음';
+  const passedSignalText = assessment.passedSignals.length
+    ? assessment.passedSignals.map((title) => `- ${title}`).join('\n')
+    : '- 없음';
 
-  const prompt = `당신은 실용적인 웹사이트 컨설턴트입니다. 다음은 GEO 검사에서 실패한 항목들입니다.
+  const prompt = `당신은 냉정하지만 실무적인 웹사이트 진단 컨설턴트입니다.
 
-## 점수
-총점: ${auditResult.scores.total}/100 (SEO: ${auditResult.scores.seo}, AEO: ${auditResult.scores.aeo}, GEO: ${auditResult.scores.geo})
+## 진단 기준
+- 총점이 60점 미만이면 부족한 상태로 판단합니다.
+- 카테고리 점수가 45점 미만이면 그 영역은 핵심 보완이 필요합니다.
+- 점수가 낮으면 칭찬으로 시작하지 마세요.
+- 근거 없는 낙관 표현과 과장된 기대효과는 쓰지 마세요.
+- 차이점이 작으면 CSR 위험을 과장하지 마세요.
 
-## 개선 필요 항목
+## 현재 점검 결과
+- 페이지 유형: ${assessment.pageProfile?.label || '일반 페이지'}
+- 상태 등급: ${assessment.severityLabel}
+- 봇 총점: ${primaryScores.total}/100
+- 봇 세부 점수: SEO ${formatScoreForPrompt(primaryScores.seo)}, AEO ${formatScoreForPrompt(primaryScores.aeo)}, GEO ${formatScoreForPrompt(primaryScores.geo)}
+- 브라우저 총점: ${assessment.secondaryResult?.scores?.total ?? primaryScores.total}/100
+- 점수 제외 항목: ${assessment.skippedCount}개
+- 봇/브라우저 차이 항목: ${assessment.diffCount}개
+- 점수 차이: ${assessment.scoreGap}점
+- 약한 영역: ${weakCategoryText}
+
+## 이미 확보된 기본요소
+${passedSignalText}
+
+## 핵심 실패 항목
+${priorityFailureText}
+
+## 응답 형식
+아래 JSON 객체만 반환하세요. 마크다운, 설명, 코드블록을 붙이지 마세요.
+{
+  "statusLine": "현재 상태를 한 줄로 요약",
+  "causes": ["핵심 원인 1", "핵심 원인 2"],
+  "differenceInterpretation": "봇/브라우저 차이에 대한 해석 한 문장"
+}`;
+
+  return parseExecutiveSummaryResponse(await fetchLLM(prompt, config));
+}
+
+/**
+ * 우선순위 액션 분석
+ *
+ * @param {AuditResult|object} auditInput - 검사 결과 또는 dual audit 결과
+ * @returns {Promise<object>} 구조화된 우선순위 액션
+ */
+export async function getPriorityActions(auditInput) {
+  const config = await getGeoAuditConfig();
+  if (!config.hasApiKey) throw new Error('페이지 진단 AI 해석에는 OpenRouter API Key가 필요합니다.');
+
+  const assessment = buildAuditAssessment(auditInput);
+  const primaryScores = assessment.primaryResult?.scores || {};
+  const failedItems = assessment.priorityFailures
+    .slice(0, 8)
+    .map((item) => `- ${item.title} (${item.category.toUpperCase()}, ${item.weight}pt): ${item.hint}`)
+    .join('\n') || '- 없음';
+
+  const prompt = `당신은 실용적인 웹사이트 컨설턴트입니다. 다음은 페이지 진단 결과입니다.
+
+## 기준 점수
+- 페이지 유형: ${assessment.pageProfile?.label || '일반 페이지'}
+- 봇 총점: ${primaryScores.total}/100
+- SEO ${formatScoreForPrompt(primaryScores.seo)}, AEO ${formatScoreForPrompt(primaryScores.aeo)}, GEO ${formatScoreForPrompt(primaryScores.geo)}
+- 상태 등급: ${assessment.severityLabel}
+
+## 우선 검토할 실패 항목
 ${failedItems}
 
-## 요청
-위 항목 중 **가장 중요한 3가지**를 선택하여 **마크다운 형식**으로 구체적인 개선 방법을 알려주세요.
-
-### 각 항목마다 포함할 내용
-1. **제목** (명확하고 간결하게)
-2. **왜 중요한가?** (비즈니스 임팩트, 1-2문장)
-3. **어떻게 개선할까?** (구체적인 실행 방법, 3-4개 단계)
-4. **코드 예시** (가능하면 HTML/JSON-LD 예시)
-5. **기대 효과** (정량적 수치 포함, 2-3개)
-6. **난이도와 시간** (쉬움/보통/어려움, 예상 소요 시간)
-
-### 예시 형식
-## 1. 메타 설명 최적화
-
-**왜 중요한가?**
-메타 설명은 검색 결과에 표시되는 미리보기 텍스트로, CTR(클릭률)에 직접적인 영향을 미칩니다.
-
-**어떻게 개선할까?**
-- 150-160자 범위로 작성
-- 주요 키워드를 자연스럽게 포함
-- 행동 유도 문구 추가 (예: "지금 확인해보세요")
-- 페이지 내용을 정확히 요약
-
-**코드 예시**
-\`\`\`html
-<meta name="description" content="BBC News는 전 세계 뉴스, 정치, 비즈니스, 과학 정보를 제공합니다. 최신 뉴스 기사와 분석을 지금 읽어보세요.">
-\`\`\`
-
-**기대 효과**
-- CTR 15-20% 증가
-- 검색 결과에서 설명이 온전히 표시됨
-- 사용자가 페이지 내용을 미리 파악
-
-**난이도와 시간**
-⚡ 쉬움 | 30분
-
----
-
 ## 규칙
-- 마크다운 형식 엄수
-- 정확히 3개 항목
-- 한국어로 작성
-- 실행 가능한 구체적인 방법
-- 코드 예시는 HTML 엔터티 없이 일반 코드블록 사용`;
+- 정확히 3개
+- 비슷한 항목은 하나로 묶으세요 (예: OG 제목/설명/이미지는 하나의 액션으로 통합 가능)
+- 코드 예시, 장황한 설명, 정량 수치 예측은 넣지 마세요
+- 각 액션은 짧고 바로 실행 가능해야 합니다
 
-  return await fetchLLM(prompt, config);
+## 응답 형식
+아래 JSON 객체만 반환하세요. 마크다운, 설명, 코드블록을 붙이지 마세요.
+{
+  "actions": [
+    {
+      "title": "액션 제목",
+      "reason": "왜 중요한지 한 문장",
+      "tasks": ["지금 할 일 1", "지금 할 일 2"],
+      "whyNow": "왜 먼저 해야 하는지 한 문장"
+    },
+    {
+      "title": "액션 제목",
+      "reason": "왜 중요한지 한 문장",
+      "tasks": ["지금 할 일 1", "지금 할 일 2"],
+      "whyNow": "왜 먼저 해야 하는지 한 문장"
+    },
+    {
+      "title": "액션 제목",
+      "reason": "왜 중요한지 한 문장",
+      "tasks": ["지금 할 일 1", "지금 할 일 2"],
+      "whyNow": "왜 먼저 해야 하는지 한 문장"
+    }
+  ]
+}`;
+
+  return parsePriorityActionsResponse(await fetchLLM(prompt, config));
 }
 
 /**
  * 실행 로드맵 생성
  *
- * @param {AuditResult} auditResult - 검사 결과
- * @returns {Promise<string>} 전체 텍스트
+ * @param {AuditResult|object} auditInput - 검사 결과 또는 dual audit 결과
+ * @returns {Promise<object>} 구조화된 실행 계획
  */
-export async function getRoadmap(auditResult) {
-  const config = await getActiveTranslationConfig();
-  if (!config.hasApiKey) throw new Error('API Key가 설정되지 않았습니다');
-
-  const failedCount = auditResult.failedCount;
-
-  const prompt = `당신은 격려하는 코치입니다. GEO 검사에서 ${failedCount}개 항목이 실패했습니다.
-
-## 요청
-개선 작업을 위한 **실행 로드맵**과 **격려 메시지**를 작성해주세요.
-
-### 형식
-## 📅 실행 로드맵
-
-**오늘 (30분-1시간)**
-- 메타 설명 최적화
-- Alt 텍스트 추가
-
-**이번 주 (2-3시간)**
-- JSON-LD 구조화 데이터 추가
-- FAQ 스키마 구축
-
-**장기 (지속적)**
-- 콘텐츠 신뢰도 향상 (저자 정보, 출처 명시)
-- 정기적인 검사 및 업데이트
-
----
-
-## 💬 마무리
-이미 ${auditResult.passedCount}개 항목을 잘 준수하고 계십니다! 위 개선사항만 적용하면 검색 가시성이 크게 향상될 거예요. 🚀
-
-## 규칙
-- 마크다운 형식
-- 3-4문장
-- 격려하는 톤
-- 한국어`;
-
-  return await fetchLLM(prompt, config);
+export async function getExecutionPlan(auditInput) {
+  const assessment = buildAuditAssessment(auditInput);
+  return buildExecutionPlanSeed(assessment);
 }
 
 /**
@@ -361,6 +742,45 @@ async function fetchLLM(prompt, config) {
     apiKey: config.apiKey,
     prompt,
     purpose: 'geo-audit'
+  });
+}
+
+async function getClientAuditResult(targetTabId, expectedUrl, parser) {
+  try {
+    const response = await chrome.tabs.sendMessage(targetTabId, {
+      action: ACTIONS.RUN_CLIENT_GEO_AUDIT,
+      expectedUrl
+    });
+
+    if (response?.success && response.auditResult) {
+      return response.auditResult;
+    }
+
+    if (response?.error === '검사 중 페이지가 변경되었습니다. 다시 시도해주세요.') {
+      throw new Error(response.error);
+    }
+  } catch (error) {
+    if (String(error?.message || '').includes('검사 중 페이지가 변경되었습니다')) {
+      throw error;
+    }
+  }
+
+  const fallbackResponse = await chrome.tabs.sendMessage(targetTabId, {
+    action: ACTIONS.GET_CURRENT_HTML
+  });
+
+  if (!fallbackResponse || fallbackResponse.error) {
+    throw new Error(fallbackResponse?.error || '브라우저 HTML 가져오기 실패');
+  }
+
+  if (expectedUrl && fallbackResponse.url && fallbackResponse.url !== expectedUrl) {
+    throw new Error('검사 중 페이지가 변경되었습니다. 다시 시도해주세요.');
+  }
+
+  const clientDoc = parser.parseFromString(fallbackResponse.html, 'text/html');
+  return await runAudit(clientDoc, {
+    url: fallbackResponse.url || expectedUrl,
+    source: 'client'
   });
 }
 
@@ -384,15 +804,22 @@ async function fetchLLM(prompt, config) {
  * console.log('브라우저 점수:', dualResult.clientResult.scores.total);
  * console.log('차이점:', dualResult.differences.length);
  */
-export async function runDualAudit(url) {
+export async function runDualAudit(url, options = {}) {
+  const targetTabId = Number(options.tabId);
+  const expectedUrl = String(options.expectedUrl || url || '').trim();
+
   // 1. URL 검증
   if (!url || (!url.startsWith('http://') && !url.startsWith('https://'))) {
     throw new Error('http/https URL만 지원합니다');
   }
 
+  if (!Number.isInteger(targetTabId)) {
+    throw new Error('검사 탭 정보를 찾을 수 없습니다');
+  }
+
   // 2. background.js를 통해 HTML fetch
   const response = await chrome.runtime.sendMessage({
-    action: 'FETCH_HTML_FOR_BOT_AUDIT',
+    action: ACTIONS.FETCH_HTML_FOR_BOT_AUDIT,
     url
   });
 
@@ -405,35 +832,20 @@ export async function runDualAudit(url) {
   const botDoc = parser.parseFromString(response.html, 'text/html');
 
   // 4. 봇 검사 (서버 HTML)
-  const botResult = await runAudit(botDoc);
+  const botResult = await runAudit(botDoc, { url, source: 'bot' });
 
-  // 5. 브라우저 검사 (현재 탭의 document에서 실행)
-  // Content Script에서 현재 HTML을 받아서 파싱
-  const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
-  const tabId = tabs[0]?.id;
-
-  if (!tabId) {
-    throw new Error('활성 탭을 찾을 수 없습니다');
-  }
-
-  // Content Script에서 현재 HTML 가져오기
-  const clientResponse = await chrome.tabs.sendMessage(tabId, {
-    action: 'GET_CURRENT_HTML'
-  });
-
-  if (!clientResponse || clientResponse.error) {
-    throw new Error(clientResponse?.error || '브라우저 HTML 가져오기 실패');
-  }
-
-  // DOMParser로 파싱 (JavaScript 실행된 후의 HTML)
-  const clientDoc = parser.parseFromString(clientResponse.html, 'text/html');
-  const clientResult = await runAudit(clientDoc);
+  // 5. 브라우저 검사
+  // 최신 content script면 현재 탭에서 바로 audit 결과만 계산하고,
+  // 구버전 탭은 HTML 스냅샷 fallback으로 호환한다.
+  const clientResult = await getClientAuditResult(targetTabId, expectedUrl, parser);
 
   // 5. 차이점 계산
   const differences = [];
-  botResult.results.forEach((botItem, idx) => {
-    const clientItem = clientResult.results[idx];
-    if (botItem.passed !== clientItem.passed) {
+  const clientResultById = new Map(clientResult.results.map((result) => [result.id, result]));
+  botResult.results.forEach((botItem) => {
+    const clientItem = clientResultById.get(botItem.id);
+    const bothApplicable = botItem?.applicable !== false && clientItem?.applicable !== false;
+    if (bothApplicable && botItem.passed !== clientItem.passed) {
       differences.push({
         id: botItem.id,
         title: botItem.title,
@@ -448,6 +860,7 @@ export async function runDualAudit(url) {
     botResult,
     clientResult,
     differences,
+    tabId: targetTabId,
     url,
     timestamp: new Date().toISOString()
   };
@@ -460,13 +873,15 @@ export async function runDualAudit(url) {
  */
 export function logAuditResult(auditResult) {
   console.group('🔍 GEO 검사 결과');
+  console.log(`페이지 유형: ${auditResult.pageProfile?.label || '일반 페이지'}`);
   console.log(`총점: ${auditResult.scores.total}/100`);
-  console.log(`SEO: ${auditResult.scores.seo}/100, AEO: ${auditResult.scores.aeo}/100, GEO: ${auditResult.scores.geo}/100`);
-  console.log(`통과: ${auditResult.passedCount}/${auditResult.results.length}`);
+  console.log(`SEO: ${formatScoreLabel(auditResult.scores.seo)}, AEO: ${formatScoreLabel(auditResult.scores.aeo)}, GEO: ${formatScoreLabel(auditResult.scores.geo)}`);
+  console.log(`통과: ${auditResult.passedCount}/${auditResult.applicableCount}`);
+  console.log(`제외: ${auditResult.skippedCount}개`);
 
   console.group('실패 항목');
   auditResult.results
-    .filter(r => !r.passed)
+    .filter(r => r.applicable !== false && !r.passed)
     .forEach(r => {
       console.log(`❌ ${r.title} (${r.category.toUpperCase()}): ${r.hint}`);
     });

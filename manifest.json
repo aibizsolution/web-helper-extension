@@ -20,6 +20,17 @@
   "optional_host_permissions": [
     "file:///*"
   ],
+  "web_accessible_resources": [
+    {
+      "resources": [
+        "modules/*.js"
+      ],
+      "matches": [
+        "https://*/*",
+        "http://*/*"
+      ]
+    }
+  ],
   "action": {
     "default_title": "웹 도우미",
     "default_icon": {

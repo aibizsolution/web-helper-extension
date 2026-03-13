@@ -11,6 +11,10 @@ import { initGeoTab as initGeoUI } from './geo-ui.js';
 import { logInfo, logError } from '../logger.js';
 import * as State from './state.js';
 
+function logGeoFlow(message, data = {}) {
+  logInfo('sidepanel', 'GEO_AUDIT_FLOW', message, data);
+}
+
 /**
  * GEO 탭 초기화
  * - UI 요소 캐시 및 초기화
@@ -18,12 +22,12 @@ import * as State from './state.js';
  */
 export function initGeoTab() {
   // UI 초기화 (geo-ui.js에서 이벤트 리스너 등록 처리)
-  const geoUI = initGeoUI({
+  initGeoUI({
     onStartAudit: handleStartAudit,
-    getLogger: logInfo
+    getLogger: logGeoFlow
   });
 
-  logInfo('GEO_TAB_INIT', 'GEO 검사 탭 초기화 완료');
+  logInfo('sidepanel', 'GEO_TAB_INIT', 'GEO 검사 탭 초기화 완료');
 }
 
 /**
@@ -34,13 +38,13 @@ async function handleStartAudit() {
   try {
     const tabId = State.getCurrentTabId();
     if (!tabId) {
-      logError('GEO_AUDIT_ERROR', '현재 탭 ID를 찾을 수 없습니다');
+      logError('sidepanel', 'GEO_AUDIT_ERROR', '현재 탭 ID를 찾을 수 없습니다');
       return;
     }
 
-    logInfo('GEO_AUDIT_START', '검사 시작');
+    logInfo('sidepanel', 'GEO_AUDIT_START', '검사 시작', { tabId });
   } catch (error) {
-    logError('GEO_AUDIT_ERROR', '검사 시작 실패', {}, error);
+    logError('sidepanel', 'GEO_AUDIT_ERROR', '검사 시작 실패', {}, error);
     throw error;
   }
 }

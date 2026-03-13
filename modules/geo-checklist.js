@@ -21,6 +21,202 @@
  * @property {string} hint - 실패 시 개선 방법 힌트
  */
 
+const PAGE_PROFILE_LABELS = {
+  generic: '일반 페이지',
+  article: '콘텐츠/아티클 페이지',
+  product: '상품/서비스 페이지',
+  landing: '랜딩 페이지',
+  login: '로그인/계정 페이지'
+};
+
+function normalizeText(value = '') {
+  return String(value || '').replace(/\s+/g, ' ').trim();
+}
+
+function getMainRoot(doc = document) {
+  return doc.querySelector('main, article, [role="main"]') || doc.body || doc.documentElement;
+}
+
+function getReadableText(doc = document) {
+  const root = getMainRoot(doc);
+  return normalizeText(root?.innerText || doc.body?.innerText || doc.documentElement?.innerText || '');
+}
+
+function getCompactLength(text = '') {
+  return normalizeText(text).replace(/\s/g, '').length;
+}
+
+function getLeadSummaryData(doc = document) {
+  const root = getMainRoot(doc);
+  const candidates = Array.from(root.querySelectorAll('p, li, h1, h2'))
+    .map((element) => normalizeText(element.textContent || element.innerText || ''))
+    .filter((text) => text.length >= 32);
+
+  const blocks = [];
+  for (const text of candidates) {
+    if (blocks.includes(text)) continue;
+    blocks.push(text);
+    if (blocks.length >= 2) break;
+  }
+
+  const leadText = blocks.join(' ');
+  return {
+    blocks,
+    leadText,
+    leadLength: getCompactLength(leadText)
+  };
+}
+
+function safeParseJson(text) {
+  try {
+    return JSON.parse(text);
+  } catch (_) {
+    return null;
+  }
+}
+
+function collectJsonLdNodes(input, bucket) {
+  if (!input) return;
+
+  if (Array.isArray(input)) {
+    input.forEach((item) => collectJsonLdNodes(item, bucket));
+    return;
+  }
+
+  if (typeof input !== 'object') {
+    return;
+  }
+
+  bucket.push(input);
+
+  if (Array.isArray(input['@graph'])) {
+    input['@graph'].forEach((item) => collectJsonLdNodes(item, bucket));
+  }
+}
+
+function getJsonLdNodes(doc = document) {
+  const nodes = [];
+  const scripts = Array.from(doc.querySelectorAll('script[type="application/ld+json"]'));
+
+  scripts.forEach((script) => {
+    const parsed = safeParseJson(script.textContent || '');
+    if (parsed) {
+      collectJsonLdNodes(parsed, nodes);
+    }
+  });
+
+  return nodes;
+}
+
+function hasJsonLdType(node, types) {
+  const allowedTypes = Array.isArray(types) ? types : [types];
+  const normalized = allowedTypes.map((type) => String(type || '').toLowerCase());
+  const value = node?.['@type'];
+  const currentTypes = Array.isArray(value) ? value : [value];
+
+  return currentTypes.some((type) => normalized.includes(String(type || '').toLowerCase()));
+}
+
+function findJsonLdByType(doc = document, types) {
+  return getJsonLdNodes(doc).find((node) => hasJsonLdType(node, types)) || null;
+}
+
+function getFirstMatchingText(doc = document, selectors = []) {
+  for (const selector of selectors) {
+    const element = doc.querySelector(selector);
+    const text = normalizeText(
+      element?.getAttribute?.('content') ||
+      element?.getAttribute?.('datetime') ||
+      element?.textContent ||
+      ''
+    );
+    if (text) {
+      return text;
+    }
+  }
+
+  return '';
+}
+
+function hasCtaText(doc = document, pattern) {
+  return Array.from(doc.querySelectorAll('button, a, [role="button"], input[type="submit"]'))
+    .some((element) => pattern.test(normalizeText(element.textContent || element.value || '')));
+}
+
+export function matchGeoProfiles(pageProfile, profiles) {
+  if (!Array.isArray(profiles) || profiles.length === 0) {
+    return true;
+  }
+
+  return profiles.includes(pageProfile?.type);
+}
+
+export function detectGeoPageProfile(doc = document, context = {}) {
+  const url = String(context?.url || '').toLowerCase();
+  const title = normalizeText(doc.title).toLowerCase();
+  const text = getReadableText(doc).toLowerCase();
+  const textLength = getCompactLength(text);
+  const loginPattern = /(login|sign\s?in|signin|auth|account|password|otp|verify|로그인|비밀번호|계정|인증|접근 권한)/i;
+  const productPattern = /(price|pricing|plan|plans|buy|purchase|checkout|cart|구매|요금|가격|장바구니|도입 문의|견적 문의)/i;
+  const landingPattern = /(무료 체험|지금 시작|도입 문의|상담 신청|문의하기|try now|get started|book demo|contact sales)/i;
+  const hasPasswordField = Boolean(doc.querySelector('input[type="password"]'));
+  const hasLoginText = loginPattern.test(`${url} ${title} ${text.slice(0, 1000)}`);
+  const hasProductSchema = Boolean(findJsonLdByType(doc, ['Product', 'Service']));
+  const hasPrice = productPattern.test(`${title} ${text.slice(0, 1400)}`) || Boolean(doc.querySelector('[itemprop="price"], [data-price], [class*="price"]'));
+  const hasPurchaseCta = hasCtaText(doc, /(buy|purchase|checkout|cart|구매|신청|결제|subscribe)/i);
+  const hasArticleSchema = Boolean(findJsonLdByType(doc, ['Article', 'NewsArticle', 'BlogPosting']));
+  const hasArticleShell = Boolean(doc.querySelector('article, [itemtype*="Article"]'));
+  const hasDateMarker = Boolean(
+    getFirstMatchingText(doc, [
+      'meta[property="article:published_time"]',
+      'meta[name="article:published_time"]',
+      'meta[name="date"]',
+      'time[datetime]',
+      '[itemprop="datePublished"]'
+    ])
+  );
+  const hasAuthorMarker = Boolean(
+    doc.querySelector('[rel="author"], [itemprop="author"], .author, .byline, .by-line, [class*="author"]') ||
+    getJsonLdNodes(doc).some((node) => node?.author)
+  );
+  const headingCount = doc.querySelectorAll('h1, h2, h3').length;
+  const ctaCount = Array.from(doc.querySelectorAll('button, a, [role="button"]'))
+    .filter((element) => landingPattern.test(normalizeText(element.textContent || ''))).length;
+
+  if ((hasPasswordField && hasLoginText) || /\/(login|signin|sign-in|auth|account|mypage|portal)/.test(url)) {
+    return {
+      type: 'login',
+      label: PAGE_PROFILE_LABELS.login
+    };
+  }
+
+  if (hasProductSchema || hasPrice || hasPurchaseCta) {
+    return {
+      type: 'product',
+      label: PAGE_PROFILE_LABELS.product
+    };
+  }
+
+  if (hasArticleSchema || hasArticleShell || ((hasDateMarker || hasAuthorMarker) && textLength >= 800) || (headingCount >= 4 && textLength >= 1500)) {
+    return {
+      type: 'article',
+      label: PAGE_PROFILE_LABELS.article
+    };
+  }
+
+  if (ctaCount >= 2 || (landingPattern.test(`${title} ${text.slice(0, 1200)}`) && textLength >= 180)) {
+    return {
+      type: 'landing',
+      label: PAGE_PROFILE_LABELS.landing
+    };
+  }
+
+  return {
+    type: 'generic',
+    label: PAGE_PROFILE_LABELS.generic
+  };
+}
+
 export const GEO_CHECKLIST = [
   // ===== SEO 체크리스트 =====
   {
@@ -32,12 +228,11 @@ export const GEO_CHECKLIST = [
     tooltip: '검색결과 요약문으로 표시되는 문장입니다. 사용자가 클릭할지 판단하는 핵심 정보로, 페이지의 내용을 압축해 전달합니다. 검색엔진은 이 설명을 통해 페이지의 주제와 관련성을 평가합니다.',
     educationText: '**왜:** 검색결과에 요약으로 노출되어 클릭률(CTR)을 좌우합니다.\n\n**어떻게:** 150-160자 내, 핵심 키워드 포함, 페이지 고유 가치 제시. **SSR(서버 렌더링)**로 `<head>`에 포함.\n\n**예시:**\n```html\n<meta name="description" content="초보도 이해하는 전기차 충전 가이드. 급속·완속 차이, 요금 절약 팁, 지역별 충전소 찾는 법을 한 번에 정리했습니다.">\n```',
     selector: (doc = document) => {
-      // 다양한 형식의 메타 설명 태그 모두 찾기
+      // 표준 메타 설명 위주로 확인
       const elem1 = doc.querySelector('meta[name="description"]');
       const elem2 = doc.querySelector('meta[property="description"]');
-      const elem3 = doc.querySelector('meta[property="og:description"]');
 
-      return elem1 || elem2 || elem3;
+      return elem1 || elem2;
     },
     validator: (elem) => {
       // 존재 여부만 확인 (글자수는 LLM 의견에서 제시)
@@ -47,8 +242,7 @@ export const GEO_CHECKLIST = [
     },
     hint: (doc = document) => {
       const elem = doc.querySelector('meta[name="description"]') ||
-                   doc.querySelector('meta[property="description"]') ||
-                   doc.querySelector('meta[property="og:description"]');
+                   doc.querySelector('meta[property="description"]');
       const length = elem?.getAttribute('content')?.length || 0;
       return `메타 설명을 150-160자 범위로 작성하면 검색결과에서 완전히 표시됩니다 (현재: ${length}자)`;
     }
@@ -92,9 +286,10 @@ export const GEO_CHECKLIST = [
     description: '<head> 내 JSON-LD 스크립트 태그가 있는지 확인\n\n💡 권장사항:\n- Article, NewsArticle, BlogPosting 스키마 추가\n- Product, Organization, LocalBusiness 등\n\n⚠️ SSR/CSR 주의:\n- SSR: <script type="application/ld+json"> 태그가 HTML 서버 소스에 있음 (✅ 통과)\n- CSR: JavaScript에서 동적으로 추가된 구조화된 데이터는 검색봇이 못 읽음 (❌ 실패)\n→ 페이지 소스(Ctrl+U)의 <head>에 JSON-LD가 있는지 확인\n→ JSON 형식이 유효한지 https://validator.schema.org에서 검증하세요',
     weight: 15,
     tooltip: '검색엔진이 페이지 정보를 "의미적으로" 이해할 수 있도록 하는 코드입니다. 예를 들어 "이건 기사야", "이건 상품이야"처럼 콘텐츠의 성격을 알려 리치결과(Rich Result)로 노출됩니다.',
-    selector: (doc = document) => doc.querySelector('script[type="application/ld+json"]'),
-    validator: (elem) => elem !== null && elem.textContent.trim().length > 0,
-    hint: 'Schema.org JSON-LD 형식으로 Article, Product 등 적절한 구조화된 데이터를 서버 HTML에 포함시키세요'
+    profiles: ['generic', 'article', 'product', 'landing'],
+    selector: (doc = document) => getJsonLdNodes(doc),
+    validator: (nodes) => Array.isArray(nodes) && nodes.length > 0,
+    hint: 'Schema.org JSON-LD 형식으로 페이지 유형에 맞는 구조화된 데이터를 서버 HTML에 포함시키세요'
   },
 
   {
@@ -239,6 +434,7 @@ export const GEO_CHECKLIST = [
     description: '<head>에 Open Graph og:title 메타 태그가 있는지 확인\n\n💡 권장사항:\n- og:title: 페이지 제목과 동일하게 설정 (50-60자 권장)\n\n⚠️ SSR/CSR 주의:\n- SSR: 서버에서 각 페이지의 og:title을 HTML에 직접 포함 (✅ 통과)\n- CSR: JavaScript에서 og:title을 동적으로 추가하면, 소셜 미디어 크롤러가 못 읽을 수 있음\n→ 페이지 소스에 <meta property="og:title"> 태그가 있는지 확인\n→ Twitter, Facebook 공유 시 미리보기를 테스트하세요',
     weight: 10,
     tooltip: '페이스북·카카오톡 등에서 링크 미리보기로 표시되는 제목입니다. 페이지의 대표 문장 역할을 하며 클릭 유도에 영향을 줍니다.',
+    profiles: ['generic', 'article', 'product', 'landing'],
     selector: (doc = document) => doc.querySelector('meta[property="og:title"]'),
     validator: (elem) => elem !== null && elem.getAttribute('content')?.trim().length > 0,
     hint: 'OG 제목을 서버 HTML의 <head>에 포함시키세요 (페이지 제목과 동일하게, 50-60자 권장)'
@@ -251,6 +447,7 @@ export const GEO_CHECKLIST = [
     description: '<head>에 Open Graph og:description 메타 태그가 있는지 확인\n\n💡 권장사항:\n- og:description: 메타 설명과 동일하게 설정\n- 길이: 150-160자 (소셜 공유 시 완전히 표시됨)\n\n⚠️ SSR/CSR 주의:\n- SSR: 서버에서 미리 생성 (✅ 소셜 공유 정상)\n- CSR: 동적 추가 시 공유 미리보기에 반영 안 될 수 있음',
     weight: 10,
     tooltip: 'OG 제목 아래에 노출되는 요약문입니다. 사용자가 링크를 클릭할지 판단하는 2차 정보로, 메타 설명과 유사한 역할을 합니다.',
+    profiles: ['generic', 'article', 'product', 'landing'],
     selector: (doc = document) => doc.querySelector('meta[property="og:description"]'),
     validator: (elem) => elem !== null && elem.getAttribute('content')?.trim().length > 0,
     hint: 'OG 설명을 서버 HTML에 포함시키세요 (메타 설명과 동일, 150-160자 권장)'
@@ -263,6 +460,7 @@ export const GEO_CHECKLIST = [
     description: '<head>에 Open Graph og:image 메타 태그가 있는지 확인\n\n💡 권장사항:\n- 이미지 크기: 1200x630px (이상적)\n- 최소: 600x315px\n- 형식: JPG, PNG (GIF 피하기)',
     weight: 10,
     tooltip: 'SNS에서 공유될 때 함께 표시되는 대표 이미지입니다. 고품질·정비율 이미지일수록 클릭률이 높습니다.',
+    profiles: ['generic', 'article', 'product', 'landing'],
     selector: (doc = document) => doc.querySelector('meta[property="og:image"]'),
     validator: (elem) => elem !== null && elem.getAttribute('content')?.trim().length > 0,
     hint: '고품질 og:image를 서버 HTML에 추가하세요 (1200x630px 권장)'
@@ -275,6 +473,7 @@ export const GEO_CHECKLIST = [
     description: 'Twitter Card 메타 태그가 있는지 확인\n\n💡 권장사항:\n- twitter:card: "summary_large_image" (권장)\n- twitter:title, twitter:description 함께 설정',
     weight: 5,
     tooltip: 'X(트위터)에서 공유될 때의 미리보기 정보입니다. OG 태그와 유사하지만 별도 메타 태그를 사용합니다.',
+    profiles: ['generic', 'article', 'product', 'landing'],
     selector: (doc = document) => doc.querySelector('meta[name="twitter:card"]'),
     validator: (elem) => elem !== null && elem.getAttribute('content')?.trim().length > 0,
     hint: 'Twitter Card 메타 태그를 서버 HTML에 추가하세요 (summary_large_image 권장)'
@@ -287,13 +486,34 @@ export const GEO_CHECKLIST = [
     description: '본문 콘텐츠가 충분히 있는지 확인\n\n💡 권장사항:\n- 최소: 500자 이상\n- 이상적: 1000자 이상 (깊이 있는 콘텐츠)\n- AI 답변 포함: 2000자 이상 권장',
     weight: 15,
     tooltip: '너무 짧으면 깊이가 부족하고, 너무 길면 이탈률이 올라갑니다. 검색 의도에 맞는 충분한 설명을 제공하는 적정 분량이 중요합니다.',
-    selector: (doc = document) => doc.body ? doc.body.innerText : '',
-    validator: (text) => {
-      const cleanText = text.replace(/\s/g, '');
-      return cleanText.length > 0; // 존재 여부만 확인
+    profiles: ['generic', 'article', 'product', 'landing'],
+    selector: (doc = document) => {
+      const text = getReadableText(doc);
+      return {
+        text,
+        length: getCompactLength(text)
+      };
     },
-    hint: (doc = document) => '최소 500자 이상의 상세한 콘텐츠를 작성하면 좋습니다 (현재: ' +
-          ((doc.body?.innerText || '').replace(/\s/g, '').length) + '자)'
+    validator: (payload, doc, pageProfile) => {
+      const thresholds = {
+        generic: 250,
+        article: 900,
+        product: 220,
+        landing: 180
+      };
+      const minimum = thresholds[pageProfile?.type] || thresholds.generic;
+      return Number(payload?.length || 0) >= minimum;
+    },
+    hint: (doc = document, payload, pageProfile) => {
+      const thresholds = {
+        generic: 250,
+        article: 900,
+        product: 220,
+        landing: 180
+      };
+      const minimum = thresholds[pageProfile?.type] || thresholds.generic;
+      return `현재 페이지 유형 기준으로 본문 길이를 조금 더 보강하세요 (권장 최소: ${minimum}자, 현재: ${payload?.length || 0}자)`;
+    }
   },
 
   // ===== GEO 체크리스트 =====
@@ -305,17 +525,9 @@ export const GEO_CHECKLIST = [
     weight: 18,
     tooltip: '질문-답변 형태를 구조화한 데이터입니다. 검색결과에 직접 Q&A 블록으로 노출될 수 있어 AI 검색 및 음성비서 응답에도 반영됩니다.',
     educationText: '**왜:** FAQ 리치결과 및 AI 답변 보강에 매우 효과적입니다.\n\n**어떻게:** FAQ 섹션의 실제 문답을 JSON-LD로 추가(과장/낚시 문구 금지).\n\n**예시:**\n```html\n<script type="application/ld+json">\n{\n "@context":"https://schema.org",\n "@type":"FAQPage",\n "mainEntity":[\n  {"@type":"Question","name":"급속과 완속 차이는?","acceptedAnswer":{"@type":"Answer","text":"급속은 DC로..."}}\n ]\n}\n</script>\n```',
-    selector: (doc = document) => {
-      const ld = doc.querySelector('script[type="application/ld+json"]');
-      if (!ld) return null;
-      try {
-        const data = JSON.parse(ld.textContent);
-        return data['@type'] === 'FAQPage' ? ld : null;
-      } catch {
-        return null;
-      }
-    },
-    validator: (elem) => elem !== null,
+    profiles: ['article', 'product', 'landing'],
+    selector: (doc = document) => findJsonLdByType(doc, 'FAQPage'),
+    validator: (node) => node !== null,
     hint: 'FAQ Schema를 추가하여 AI 답변에 최적화하세요'
   },
 
@@ -326,9 +538,28 @@ export const GEO_CHECKLIST = [
     description: '페이지 시작 부분에 명확한 요약 내용이 있는지 확인\n\n💡 권장사항:\n- 길이: 150-300자\n- 위치: 페이지 최상단 또는 첫 단락\n- 내용: 핵심을 명확하게 설명 (AI 답변 답로 사용됨)',
     weight: 15,
     tooltip: '페이지 초반부의 핵심 요약문은 사용자 이탈을 줄이고, 검색결과의 자동 요약이나 AI 답변 품질에 긍정적 영향을 줍니다.',
-    selector: (doc = document) => doc.body ? doc.body.innerText : '',
-    validator: (text) => text?.trim().length > 0, // 콘텐츠 존재 여부만
-    hint: '페이지 시작에 명확한 요약 문장을 150-300자로 추가하세요 (AI 답변에 포함될 가능성 증가)'
+    profiles: ['generic', 'article', 'product', 'landing'],
+    selector: (doc = document) => getLeadSummaryData(doc),
+    validator: (summaryData, doc, pageProfile) => {
+      const thresholds = {
+        generic: 70,
+        article: 110,
+        product: 60,
+        landing: 55
+      };
+      const minimum = thresholds[pageProfile?.type] || thresholds.generic;
+      return Number(summaryData?.leadLength || 0) >= minimum;
+    },
+    hint: (doc = document, summaryData, pageProfile) => {
+      const thresholds = {
+        generic: 70,
+        article: 110,
+        product: 60,
+        landing: 55
+      };
+      const minimum = thresholds[pageProfile?.type] || thresholds.generic;
+      return `페이지 시작 부분에 핵심 요약을 먼저 보여주세요 (권장 최소: ${minimum}자, 현재: ${summaryData?.leadLength || 0}자)`;
+    }
   },
 
   {
@@ -338,17 +569,9 @@ export const GEO_CHECKLIST = [
     description: 'Breadcrumb Schema가 있는지 확인',
     weight: 6,
     tooltip: '"홈 > 카테고리 > 페이지" 형태의 경로 표시입니다. 사이트 구조를 시각화해 탐색을 돕고, 리치결과(빵가루 링크)에도 활용됩니다.',
-    selector: (doc = document) => {
-      const ld = doc.querySelector('script[type="application/ld+json"]');
-      if (!ld) return null;
-      try {
-        const data = JSON.parse(ld.textContent);
-        return data['@type'] === 'BreadcrumbList' ? ld : null;
-      } catch {
-        return null;
-      }
-    },
-    validator: (elem) => elem !== null,
+    profiles: ['generic', 'article', 'product'],
+    selector: (doc = document) => findJsonLdByType(doc, 'BreadcrumbList'),
+    validator: (node) => node !== null,
     hint: 'Breadcrumb Schema를 추가하여 네비게이션을 명확하게 하세요'
   },
 
@@ -359,7 +582,8 @@ export const GEO_CHECKLIST = [
     description: '이미지/인용구에 출처가 명시되어 있는지 확인',
     weight: 8,
     tooltip: '이미지나 인용문에 출처를 표시하는 것은 신뢰도를 높이고, E-E-A-T(전문성·권위·신뢰성) 평가에서 긍정적으로 작용합니다.',
-    selector: (doc = document) => doc.querySelectorAll('[data-source], cite, .attribution'),
+    profiles: ['article'],
+    selector: (doc = document) => doc.querySelectorAll('[data-source], cite, .attribution, figcaption cite, blockquote cite'),
     validator: (elements) => elements.length > 0,
     hint: '이미지와 인용구에 출처를 명시하세요'
   },
@@ -371,8 +595,19 @@ export const GEO_CHECKLIST = [
     description: '저자 정보 또는 byline이 있는지 확인',
     weight: 10,
     tooltip: '콘텐츠 작성자(Author)의 신원과 전문성을 명시하면 검색엔진이 "신뢰할 수 있는 정보"로 인식합니다. 뉴스·블로그·전문 콘텐츠에 특히 중요합니다.',
-    selector: (doc = document) => doc.querySelector('[rel="author"], .author, .by-line, [itemtype*="Person"]'),
-    validator: (elem) => elem !== null,
+    profiles: ['article'],
+    selector: (doc = document) => {
+      const domAuthor = doc.querySelector('[rel="author"], [itemprop="author"], .author, .byline, .by-line, [class*="author"], [itemtype*="Person"]');
+      if (domAuthor) return domAuthor;
+
+      return getJsonLdNodes(doc).find((node) => {
+        if (!node?.author) return false;
+        if (typeof node.author === 'string') return node.author.trim().length > 0;
+        if (Array.isArray(node.author)) return node.author.some((item) => normalizeText(item?.name || item).length > 0);
+        return normalizeText(node.author?.name || '').length > 0;
+      }) || null;
+    },
+    validator: (value) => value !== null,
     hint: '저자 정보를 추가하여 신뢰도를 높이세요'
   },
 
@@ -383,8 +618,29 @@ export const GEO_CHECKLIST = [
     description: '발행일 메타 태그 또는 스키마가 있는지 확인',
     weight: 8,
     tooltip: '콘텐츠의 최신성을 나타내는 요소입니다. 검색결과에서 "최근 정보"로 판단되는 근거가 되며, 정기 업데이트 시 dateModified도 함께 활용됩니다.',
-    selector: (doc = document) => doc.querySelector('meta[property="article:published_time"], [itemtype*="datePublished"]'),
-    validator: (elem) => elem !== null,
+    profiles: ['article'],
+    selector: (doc = document) => {
+      const metaDate = getFirstMatchingText(doc, [
+        'meta[property="article:published_time"]',
+        'meta[name="article:published_time"]',
+        'meta[name="date"]',
+        'meta[property="og:updated_time"]',
+        'time[datetime]',
+        '[itemprop="datePublished"]',
+        '[datetime]'
+      ]);
+      if (metaDate) {
+        return metaDate;
+      }
+
+      const jsonLdNode = getJsonLdNodes(doc).find((node) => {
+        const dateValue = normalizeText(node?.datePublished || node?.dateModified || '');
+        return dateValue.length > 0;
+      });
+
+      return normalizeText(jsonLdNode?.datePublished || jsonLdNode?.dateModified || '');
+    },
+    validator: (value) => normalizeText(value).length > 0,
     hint: '발행일을 메타 태그 또는 구조화된 데이터로 표시하세요'
   },
 
@@ -395,6 +651,7 @@ export const GEO_CHECKLIST = [
     description: 'H1 → H2 → H3 순서로 계층적 제목이 있는지 확인',
     weight: 8,
     tooltip: 'H1 → H2 → H3처럼 계층적으로 구성된 제목 체계입니다. 문서의 논리적 흐름을 구조화해 검색엔진이 내용을 더 정확히 파악하도록 돕습니다.',
+    profiles: ['generic', 'article', 'product', 'landing'],
     selector: (doc = document) => {
       const h1 = doc.querySelectorAll('h1, h2, h3, h4');
       return h1;
@@ -402,8 +659,9 @@ export const GEO_CHECKLIST = [
     validator: (headings) => {
       if (headings.length < 2) return false;
       const tags = Array.from(headings).map(h => parseInt(h.tagName[1]));
-      // H1 존재 확인 및 대체로 순차적인지 확인
-      return tags.includes(1) && tags[0] === 1;
+      const hasH1 = tags.includes(1);
+      const hasSubHeading = tags.some((level) => level >= 2);
+      return hasH1 && hasSubHeading && tags[0] === 1;
     },
     hint: 'H1으로 시작하여 계층적인 제목 구조를 만드세요'
   }

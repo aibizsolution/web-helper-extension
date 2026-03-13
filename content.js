@@ -11,13 +11,14 @@ if (typeof window.__WPT_INITIALIZED !== 'undefined') {
   console.log('[WPT] Content script already initialized, skipping reinit');
 } else {
   window.__WPT_INITIALIZED = true;
-  const CONTENT_RUNTIME_VERSION = '2026-03-12-content-v3';
+  const CONTENT_RUNTIME_VERSION = '2026-03-13-content-v4';
   window.__WPT_CONTENT_RUNTIME_VERSION = CONTENT_RUNTIME_VERSION;
 
   let port = null;
   let activeRun = null;
   let originalTexts = new WeakMap();
   let translatedElements = new Set();
+  let geoAuditModulePromise = null;
 
   window.WPT = window.WPT || {};
   const WPT = window.WPT;
@@ -35,6 +36,8 @@ if (typeof window.__WPT_INITIALIZED !== 'undefined') {
       SEARCH_SELECTION: 'SEARCH_SELECTION',
       GET_PROGRESS_V2: 'GET_PROGRESS_V2',
       OPEN_QUICK_TRANSLATE_PANEL: 'OPEN_QUICK_TRANSLATE_PANEL',
+      GET_CURRENT_HTML: 'GET_CURRENT_HTML',
+      RUN_CLIENT_GEO_AUDIT: 'RUN_CLIENT_GEO_AUDIT',
       TRANSLATE_FULL_PAGE: 'translateFullPage',
       RESTORE_ORIGINAL: 'restoreOriginal',
       GET_TRANSLATION_STATE: 'getTranslationState',
@@ -113,6 +116,22 @@ if (typeof window.__WPT_INITIALIZED !== 'undefined') {
       translatedTitle: '',
       previewText: ''
     };
+  }
+
+  function loadGeoAuditModule() {
+    if (!geoAuditModulePromise) {
+      const moduleUrl = chrome.runtime?.getURL?.('modules/geo-audit.js');
+      if (!moduleUrl) {
+        throw new Error('GEO 진단 모듈 경로를 찾을 수 없습니다.');
+      }
+
+      geoAuditModulePromise = import(moduleUrl).catch((error) => {
+        geoAuditModulePromise = null;
+        throw error;
+      });
+    }
+
+    return geoAuditModulePromise;
   }
 
   function maskSensitive(data) {
@@ -300,35 +319,43 @@ if (typeof window.__WPT_INITIALIZED !== 'undefined') {
       return true;
     }
 
-    if (request.action === 'GEO_GET_SELECTORS') {
-      handleGeoSelectorsRequest(request, sendResponse);
+    if (request.action === CONST.ACTIONS.RUN_CLIENT_GEO_AUDIT) {
+      handleClientGeoAuditRequest(request)
+        .then((auditResult) => sendResponse({
+          success: true,
+          auditResult,
+          url: window.location.href
+        }))
+        .catch((error) => sendResponse({ success: false, error: error.message }));
       return true;
     }
 
-    if (request.action === 'GET_CURRENT_HTML') {
-      sendResponse({ html: document.documentElement.outerHTML });
+    if (request.action === CONST.ACTIONS.GET_CURRENT_HTML) {
+      sendResponse({
+        html: document.documentElement.outerHTML,
+        url: window.location.href
+      });
       return true;
     }
 
     return false;
   });
 
-  async function handleGeoSelectorsRequest(request, sendResponse) {
-    try {
-      const selectors = request.selectors || [];
-      const results = [];
-      for (const selectorDef of selectors) {
-        try {
-          const selectorFunc = eval(`(${selectorDef.selectorCode})`);
-          results.push({ id: selectorDef.id, value: selectorFunc() });
-        } catch (error) {
-          results.push({ id: selectorDef.id, value: null, error: error.message });
-        }
-      }
-      sendResponse({ data: results });
-    } catch (error) {
-      sendResponse({ error: error.message });
+  async function handleClientGeoAuditRequest(request) {
+    const expectedUrl = String(request?.expectedUrl || '').trim();
+    if (expectedUrl && window.location.href !== expectedUrl) {
+      throw new Error('검사 중 페이지가 변경되었습니다. 다시 시도해주세요.');
     }
+
+    const geoAuditModule = await loadGeoAuditModule();
+    if (typeof geoAuditModule?.runAudit !== 'function') {
+      throw new Error('클라이언트 GEO 진단 모듈을 불러오지 못했습니다.');
+    }
+
+    return await geoAuditModule.runAudit(document, {
+      url: window.location.href,
+      source: 'client'
+    });
   }
 
   function capturePreviewFromTranslation(translation) {

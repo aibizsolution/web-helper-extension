@@ -8,6 +8,7 @@
  */
 
 import { groupChecklistByCategory } from './geo-checklist.js';
+import { buildAuditAssessment } from './geo-audit.js';
 import { ACTIONS } from './constants.js';
 import { escapeHtml, renderTooltipIcon } from './panel-dom.js';
 import { ensurePageContentScript, showToast } from './ui-utils.js';
@@ -46,7 +47,7 @@ function renderCategoryScoreLabel(category) {
 
 function renderScoreDetail(scores) {
   return ['seo', 'aeo', 'geo']
-    .map((category) => `${CATEGORY_COPY[category].inline}: ${scores?.[category] ?? 0}`)
+    .map((category) => `${CATEGORY_COPY[category].inline}: ${Number.isFinite(scores?.[category]) ? scores[category] : '해당 없음'}`)
     .join(' | ');
 }
 
@@ -54,6 +55,79 @@ function renderScoreCardShell(contentHtml) {
   return `
     <div class="geo-panel-card-title">점검 결과</div>
     ${contentHtml}
+  `;
+}
+
+function getDifferenceBannerText(assessment) {
+  if (!assessment?.diffCount) {
+    return '봇과 브라우저 결과가 일치합니다';
+  }
+
+  if (assessment.hasOnlyLowSignalDifferences && assessment.scoreGap <= 3) {
+    return '낮은 우선순위 스타일 항목에서만 작은 차이가 있습니다';
+  }
+
+  if (assessment.diffCount === 1 && assessment.scoreGap <= 3) {
+    return '현재 차이는 작지만 일부 요소가 JS 실행 후에만 보입니다';
+  }
+
+  if (assessment.diffCount <= 2 && assessment.scoreGap <= 7) {
+    return '일부 요소가 초기 HTML에 바로 노출되지 않습니다';
+  }
+
+  if (assessment.diffCount <= 4 && assessment.scoreGap <= 15) {
+    return '초기 HTML과 브라우저 차이가 눈에 띕니다';
+  }
+
+  return '렌더링 의존도가 높아 검색봇이 핵심 요소를 놓칠 수 있습니다';
+}
+
+function renderDifferenceBanner(assessment) {
+  if (!assessment?.diffCount) {
+    return '<div class="geo-diff-success">✅ 봇과 브라우저 결과가 일치합니다</div>';
+  }
+
+  return `<div class="geo-diff-warning">⚠️ <strong>차이점 ${assessment.diffCount}개 발견</strong>: ${getDifferenceBannerText(assessment)}</div>`;
+}
+
+function renderScoreComparison(assessment) {
+  const botResult = assessment.primaryResult;
+  const clientResult = assessment.secondaryResult;
+
+  if (!botResult || !clientResult) {
+    return '';
+  }
+
+  return `
+    <div class="geo-score-comparison">
+      <h3>📊 점수 비교</h3>
+      <div class="geo-score-context">페이지 유형: ${escapeHtml(assessment.pageProfile?.label || '일반 페이지')} · 제외 항목 ${assessment.skippedCount || 0}개</div>
+      <div class="geo-score-row">
+        <div class="geo-score-col">
+          <div class="geo-score-label">🤖 봇 (초기 HTML)</div>
+          <div class="geo-score-value ${botResult.scores.total < 50 ? 'low' : ''}">
+            ${botResult.scores.total}/100
+          </div>
+          <div class="geo-score-detail">
+            ${renderScoreDetail(botResult.scores)}
+          </div>
+        </div>
+        <div class="geo-score-col">
+          <div class="geo-score-label">👤 브라우저 (JS 실행 후)</div>
+          <div class="geo-score-value ${clientResult.scores.total < 50 ? 'low' : ''}">
+            ${clientResult.scores.total}/100
+          </div>
+          <div class="geo-score-detail">
+            ${renderScoreDetail(clientResult.scores)}
+          </div>
+        </div>
+      </div>
+      ${assessment.diffCount > 0 ? `<div class="geo-score-gap">
+        <span class="geo-gap-icon">📉</span>
+        <span class="geo-gap-text">${assessment.scoreGap}점 차이</span>
+        <span class="geo-gap-hint">→ ${escapeHtml(assessment.differenceSummary)}</span>
+      </div>` : ''}
+    </div>
   `;
 }
 
@@ -89,6 +163,7 @@ export function initGeoTab(config = {}) {
     tab: document.getElementById('geoTab'),
     container: document.getElementById('geoContainer'),
     runButton: document.getElementById('geoRunAuditBtn'),
+    introNote: document.getElementById('geoIntroNote'),
     resultSection: document.getElementById('geoResultSection'),
     scoreCard: document.getElementById('geoScoreCard'),
     checklistContainer: document.getElementById('geoChecklistContainer'),
@@ -195,12 +270,15 @@ async function handleRunAudit(elements, getLogger, onStartAudit) {
     const {
       runDualAudit,
       logAuditResult,
-      getStrengths,
-      getImprovements,
-      getRoadmap
+      getExecutiveSummary,
+      getPriorityActions,
+      getExecutionPlan
     } = await import('./geo-audit.js');
 
-    const dualResult = await runDualAudit(currentUrl);
+    const dualResult = await runDualAudit(currentUrl, {
+      tabId,
+      expectedUrl: currentUrl
+    });
 
     // 결과 기록 (봇 기준)
     getLogger('🤖 봇 검사 결과:');
@@ -231,19 +309,19 @@ async function handleRunAudit(elements, getLogger, onStartAudit) {
     }
 
     // 토스트 메시지 표시
-    showToast('🤖 AI 컨설턴트 분석을 시작합니다...', 'info');
+    showToast('🤖 AI 해석을 준비 중입니다...', 'info');
 
     // AI 분석 로딩 표시
-    strengthsSection.innerHTML = '<p class="geo-ai-status">🎉 강점 분석 중...</p>';
-    improvementsSection.innerHTML = '<p class="geo-ai-status">🔍 개선사항 분석 중...</p>';
-    roadmapSection.innerHTML = '<p class="geo-ai-status">📅 로드맵 생성 중...</p>';
+    strengthsSection.innerHTML = '<p class="geo-ai-status">현황 해석 정리 중...</p>';
+    improvementsSection.innerHTML = '<p class="geo-ai-status">우선순위 액션 정리 중...</p>';
+    roadmapSection.innerHTML = '<p class="geo-ai-status">실행 계획 정리 중...</p>';
 
     // ✅ 3단계: AI 요청 3개 병렬 실행
     getLogger('💡 AI 분석 3개 병렬 실행 중...');
     const aiPromises = [
-      getStrengths(dualResult.botResult).catch(err => ({ error: err.message })),
-      getImprovements(dualResult.botResult).catch(err => ({ error: err.message })),
-      getRoadmap(dualResult.botResult).catch(err => ({ error: err.message }))
+      getExecutiveSummary(dualResult).catch(err => ({ error: err.message })),
+      getPriorityActions(dualResult).catch(err => ({ error: err.message })),
+      getExecutionPlan(dualResult).catch(err => ({ error: err.message }))
     ];
 
     // ✅ 4단계: AI 응답 도착 시 표시
@@ -252,24 +330,24 @@ async function handleRunAudit(elements, getLogger, onStartAudit) {
 
       // 강점
       if (strengths && !strengths.error) {
-        strengthsSection.innerHTML = formatMarkdownToHtml(strengths);
-        getLogger('✅ 강점 분석 완료');
+        strengthsSection.innerHTML = renderExecutiveSummary(strengths);
+        getLogger('✅ 현황 해석 완료');
       } else {
         strengthsSection.innerHTML = `<p class="geo-ai-status is-error">⚠️ ${escapeHtml(strengths?.error || '분석 실패')}</p>`;
       }
 
       // 개선사항
       if (improvements && !improvements.error) {
-        improvementsSection.innerHTML = formatMarkdownToHtml(improvements);
-        getLogger('✅ 개선사항 분석 완료');
+        improvementsSection.innerHTML = renderPriorityActions(improvements);
+        getLogger('✅ 우선순위 액션 정리 완료');
       } else {
         improvementsSection.innerHTML = `<p class="geo-ai-status is-error">⚠️ ${escapeHtml(improvements?.error || '분석 실패')}</p>`;
       }
 
       // 로드맵
       if (roadmap && !roadmap.error) {
-        roadmapSection.innerHTML = formatMarkdownToHtml(roadmap);
-        getLogger('✅ 로드맵 생성 완료');
+        roadmapSection.innerHTML = renderExecutionPlan(roadmap);
+        getLogger('✅ 실행 계획 정리 완료');
       } else {
         roadmapSection.innerHTML = `<p class="geo-ai-status is-error">⚠️ ${escapeHtml(roadmap?.error || '분석 실패')}</p>`;
       }
@@ -289,107 +367,6 @@ async function handleRunAudit(elements, getLogger, onStartAudit) {
 }
 
 /**
- * Dual Audit 결과 표시 (순차 애니메이션)
- * 체크리스트 항목을 0.5초 간격으로 하나씩 fade-in
- */
-async function displayDualAuditResultAnimated(elements, dualResult) {
-  // elements 안전성 체크
-  if (!elements || !elements.resultSection || !elements.scoreCard || !elements.checklistContainer) {
-    console.error('GEO UI elements not found', elements);
-    return;
-  }
-
-  const { botResult, clientResult, differences } = dualResult;
-
-  // 1. 점수 카드 먼저 표시 (즉시)
-  const diffWarning = differences.length > 0
-    ? `<div class="geo-diff-warning">⚠️ <strong>차이점 ${differences.length}개 발견</strong>: 봇은 못 보지만 브라우저는 보는 요소가 있습니다</div>`
-    : `<div class="geo-diff-success">✅ 봇과 브라우저 결과가 일치합니다</div>`;
-
-  const scoreComparison = `
-    <div class="geo-score-comparison">
-      <h3>📊 점수 비교</h3>
-      <div class="geo-score-row">
-        <div class="geo-score-col">
-          <div class="geo-score-label">🤖 봇 (초기 HTML)</div>
-          <div class="geo-score-value ${botResult.scores.total < 50 ? 'low' : ''}">
-            ${botResult.scores.total}/100
-          </div>
-          <div class="geo-score-detail">
-            ${renderScoreDetail(botResult.scores)}
-          </div>
-        </div>
-        <div class="geo-score-col">
-          <div class="geo-score-label">👤 브라우저 (JS 실행 후)</div>
-          <div class="geo-score-value ${clientResult.scores.total < 50 ? 'low' : ''}">
-            ${clientResult.scores.total}/100
-          </div>
-          <div class="geo-score-detail">
-            ${renderScoreDetail(clientResult.scores)}
-          </div>
-        </div>
-      </div>
-      ${differences.length > 0 ? `<div class="geo-score-gap">
-        <span class="geo-gap-icon">📉</span>
-        <span class="geo-gap-text">${Math.abs(clientResult.scores.total - botResult.scores.total)}점 차이</span>
-        <span class="geo-gap-hint">→ CSR 의존도가 높습니다. 검색봇이 제대로 읽지 못할 수 있습니다.</span>
-      </div>` : ''}
-    </div>
-  `;
-
-  // 점수 카드는 나중에 표시 (숨김)
-  elements.scoreCard.innerHTML = renderScoreCardShell(diffWarning + scoreComparison);
-  elements.scoreCard.style.opacity = '0';
-  elements.scoreCard.style.display = 'none';
-  elements.resultSection.style.display = 'block';
-
-  // 2. 체크리스트 컨테이너 준비
-  const grouped = groupChecklistByCategory();
-  let comparisonContainer = document.createElement('div');
-  comparisonContainer.className = 'geo-dual-comparison';
-  elements.checklistContainer.innerHTML = '';
-  elements.checklistContainer.appendChild(comparisonContainer);
-
-  // 3. 각 카테고리별로 순차적으로 항목 추가 (0.5초 간격)
-  for (const [category, items] of Object.entries(grouped)) {
-    const categoryLabel = getCategoryTitle(category);
-
-    // 카테고리 컨테이너 생성
-    const categoryDiv = document.createElement('div');
-    categoryDiv.className = 'geo-category';
-    categoryDiv.innerHTML = `
-      <h3 class="geo-category-title">${categoryLabel}</h3>
-      <div class="geo-items"></div>
-    `;
-    comparisonContainer.appendChild(categoryDiv);
-
-    const itemsContainer = categoryDiv.querySelector('.geo-items');
-
-    // 각 항목을 weight 높은 순으로 정렬
-    const sortedItems = [...items].sort((a, b) => b.weight - a.weight);
-
-    // 항목 하나씩 추가 (0.5초 간격)
-    for (const item of sortedItems) {
-      const botItem = botResult.results.find(r => r.id === item.id);
-      const clientItem = clientResult.results.find(r => r.id === item.id);
-      const isDifferent = differences.some(d => d.id === item.id);
-
-      const itemHtml = renderDualCheckItem(botItem, clientItem, isDifferent, item.tooltip);
-
-      // DOM 요소 생성
-      const itemDiv = document.createElement('div');
-      itemDiv.innerHTML = itemHtml;
-      itemDiv.firstChild.style.opacity = '0';
-      itemDiv.firstChild.style.animation = 'fadeIn 0.5s forwards';
-      itemsContainer.appendChild(itemDiv.firstChild);
-
-      // 0.5초 대기
-      await new Promise(resolve => setTimeout(resolve, 500));
-    }
-  }
-}
-
-/**
  * AI 분석 섹션 컨테이너 생성
  * 3개 섹션을 가진 컨테이너를 improvementSection에 삽입
  */
@@ -401,20 +378,20 @@ function createAISectionContainer(elements) {
 
   const html = `
     <div class="geo-ai-analysis geo-panel-card card">
-      <div class="geo-panel-card-title">AI 컨설턴트 분석</div>
+      <div class="geo-panel-card-title">AI 해석</div>
 
       <div class="geo-ai-section">
-        <h4>👍 잘하고 있는 부분</h4>
+        <h4>현황 해석</h4>
         <div id="geoAiStrengths" class="geo-ai-content"></div>
       </div>
 
       <div class="geo-ai-section">
-        <h4>🎯 우선순위 개선사항 TOP 3</h4>
+        <h4>우선순위 액션</h4>
         <div id="geoAiImprovements" class="geo-ai-content"></div>
       </div>
 
       <div class="geo-ai-section">
-        <h4>📅 실행 로드맵</h4>
+        <h4>실행 계획</h4>
         <div id="geoAiRoadmap" class="geo-ai-content"></div>
       </div>
     </div>
@@ -422,6 +399,106 @@ function createAISectionContainer(elements) {
 
   elements.improvementSection.innerHTML = html;
   return elements.improvementSection.querySelector('.geo-ai-analysis');
+}
+
+function renderGeoAiList(items = []) {
+  if (!Array.isArray(items) || items.length === 0) {
+    return '';
+  }
+
+  return `<ul class="geo-ai-list">${items.map((item) => `<li>${escapeHtml(item)}</li>`).join('')}</ul>`;
+}
+
+function renderExecutiveSummary(summary) {
+  if (!summary || typeof summary !== 'object') {
+    return formatMarkdownToHtml(String(summary || ''));
+  }
+
+  const hasStructuredContent = summary.statusLine || (Array.isArray(summary.causes) && summary.causes.length) || summary.differenceInterpretation;
+  if (!hasStructuredContent) {
+    return formatMarkdownToHtml(summary.rawText || '');
+  }
+
+  return `
+    <div class="geo-ai-summary-card">
+      ${summary.statusLine ? `<p class="geo-ai-summary-line">${escapeHtml(summary.statusLine)}</p>` : ''}
+      ${Array.isArray(summary.causes) && summary.causes.length ? `
+        <div class="geo-ai-block">
+          <div class="geo-ai-block-label">핵심 원인</div>
+          ${renderGeoAiList(summary.causes)}
+        </div>
+      ` : ''}
+      ${summary.differenceInterpretation ? `
+        <div class="geo-ai-block">
+          <div class="geo-ai-block-label">봇/브라우저 해석</div>
+          <p>${escapeHtml(summary.differenceInterpretation)}</p>
+        </div>
+      ` : ''}
+    </div>
+  `;
+}
+
+function renderPriorityActions(actionsData) {
+  if (!actionsData || typeof actionsData !== 'object') {
+    return formatMarkdownToHtml(String(actionsData || ''));
+  }
+
+  if (!Array.isArray(actionsData.actions) || actionsData.actions.length === 0) {
+    return formatMarkdownToHtml(actionsData.rawText || '');
+  }
+
+  return `
+    <div class="geo-ai-action-stack">
+      ${actionsData.actions.map((action, index) => `
+        <div class="geo-ai-action-card">
+          <div class="geo-ai-action-head">
+            <span class="geo-ai-action-index">${index + 1}</span>
+            <span class="geo-ai-action-title">${escapeHtml(action.title || '')}</span>
+          </div>
+          ${action.reason ? `<p class="geo-ai-action-reason">${escapeHtml(action.reason)}</p>` : ''}
+          ${Array.isArray(action.tasks) && action.tasks.length ? `
+            <div class="geo-ai-block">
+              <div class="geo-ai-block-label">지금 할 일</div>
+              ${renderGeoAiList(action.tasks)}
+            </div>
+          ` : ''}
+          ${action.whyNow ? `
+            <div class="geo-ai-block">
+              <div class="geo-ai-block-label">우선순위 근거</div>
+              <p>${escapeHtml(action.whyNow)}</p>
+            </div>
+          ` : ''}
+        </div>
+      `).join('')}
+    </div>
+  `;
+}
+
+function renderExecutionPlan(planData) {
+  if (!planData || typeof planData !== 'object') {
+    return formatMarkdownToHtml(String(planData || ''));
+  }
+
+  const sections = [
+    { label: '오늘', items: planData.today },
+    { label: '이번 주', items: planData.thisWeek },
+    { label: '이후', items: planData.later }
+  ].filter((section) => Array.isArray(section.items) && section.items.length > 0);
+
+  if (sections.length === 0) {
+    return formatMarkdownToHtml(planData.rawText || '');
+  }
+
+  return `
+    <div class="geo-ai-plan-grid">
+      ${sections.map((section) => `
+        <div class="geo-ai-plan-card">
+          <div class="geo-ai-block-label">${section.label}</div>
+          ${renderGeoAiList(section.items)}
+        </div>
+      `).join('')}
+    </div>
+  `;
 }
 
 /**
@@ -444,21 +521,22 @@ function displayAuditResult(elements, auditResult, improvement = '') {
         <div class="score-label">총점</div>
       </div>
       <div class="geo-score-item seo">
-        <div class="score-value">${scores.seo}</div>
+        <div class="score-value">${Number.isFinite(scores.seo) ? scores.seo : '제외'}</div>
         <div class="score-label">${renderCategoryScoreLabel('seo')}</div>
       </div>
       <div class="geo-score-item aeo">
-        <div class="score-value">${scores.aeo}</div>
+        <div class="score-value">${Number.isFinite(scores.aeo) ? scores.aeo : '제외'}</div>
         <div class="score-label">${renderCategoryScoreLabel('aeo')}</div>
       </div>
       <div class="geo-score-item geo">
-        <div class="score-value">${scores.geo}</div>
+        <div class="score-value">${Number.isFinite(scores.geo) ? scores.geo : '제외'}</div>
         <div class="score-label">${renderCategoryScoreLabel('geo')}</div>
       </div>
     </div>
     <div class="geo-score-summary">
       <span>✅ 통과: ${passedCount}개</span>
       <span>❌ 실패: ${failedCount}개</span>
+      <span>⏭️ 제외: ${auditResult.skippedCount || 0}개</span>
     </div>
   `);
 
@@ -467,7 +545,10 @@ function displayAuditResult(elements, auditResult, improvement = '') {
   let checklistHtml = '';
 
   Object.entries(grouped).forEach(([category, items]) => {
-    const categoryResults = results.filter(r => r.category === category);
+    const categoryResults = results.filter(r => r.category === category && r.applicable !== false);
+    if (categoryResults.length === 0) {
+      return;
+    }
     const categoryLabel = getCategoryTitle(category);
 
     checklistHtml += `<div class="geo-category">
@@ -508,61 +589,42 @@ function displayDualAuditResult(elements, dualResult, improvement = '') {
   if (!elements.resultSection) return;
 
   const { botResult, clientResult, differences } = dualResult;
+  const assessment = buildAuditAssessment(dualResult);
 
   // 차이점 경고
-  const diffWarning = differences.length > 0
-    ? `<div class="geo-diff-warning">⚠️ <strong>차이점 ${differences.length}개 발견</strong>: 봇은 못 보지만 브라우저는 보는 요소가 있습니다</div>`
-    : `<div class="geo-diff-success">✅ 봇과 브라우저 결과가 일치합니다</div>`;
-
-  // 점수 비교
-  const scoreComparison = `
-    <div class="geo-score-comparison">
-      <h3>📊 점수 비교</h3>
-      <div class="geo-score-row">
-        <div class="geo-score-col">
-          <div class="geo-score-label">🤖 봇 (초기 HTML)</div>
-          <div class="geo-score-value ${botResult.scores.total < 50 ? 'low' : ''}">
-            ${botResult.scores.total}/100
-          </div>
-          <div class="geo-score-detail">
-            ${renderScoreDetail(botResult.scores)}
-          </div>
-        </div>
-        <div class="geo-score-col">
-          <div class="geo-score-label">👤 브라우저 (JS 실행 후)</div>
-          <div class="geo-score-value ${clientResult.scores.total < 50 ? 'low' : ''}">
-            ${clientResult.scores.total}/100
-          </div>
-          <div class="geo-score-detail">
-            ${renderScoreDetail(clientResult.scores)}
-          </div>
-        </div>
-      </div>
-      ${differences.length > 0 ? `<div class="geo-score-gap">
-        <span class="geo-gap-icon">📉</span>
-        <span class="geo-gap-text">${Math.abs(clientResult.scores.total - botResult.scores.total)}점 차이</span>
-        <span class="geo-gap-hint">→ CSR 의존도가 높습니다. 검색봇이 제대로 읽지 못할 수 있습니다.</span>
-      </div>` : ''}
-    </div>
-  `;
+  const diffWarning = renderDifferenceBanner(assessment);
+  const scoreComparison = renderScoreComparison(assessment);
 
   // 항목별 나란히 비교
   const grouped = groupChecklistByCategory();
   let comparisonHtml = '<div class="geo-dual-comparison">';
 
   Object.entries(grouped).forEach(([category, items]) => {
+    const applicableItems = items.filter((item) => {
+      const botItem = botResult.results.find((result) => result.id === item.id);
+      const clientItem = clientResult.results.find((result) => result.id === item.id);
+      return botItem?.applicable !== false || clientItem?.applicable !== false;
+    });
+
+    if (applicableItems.length === 0) {
+      return;
+    }
+
     const categoryLabel = getCategoryTitle(category);
     comparisonHtml += `<div class="geo-category">
       <h3 class="geo-category-title">${categoryLabel}</h3>
       <div class="geo-items">`;
 
     // 각 항목을 weight 높은 순으로 정렬
-    const sortedItems = [...items].sort((a, b) => b.weight - a.weight);
+    const sortedItems = [...applicableItems].sort((a, b) => b.weight - a.weight);
 
     // 각 항목별로 봇/브라우저 나란히 표시
     sortedItems.forEach(item => {
       const botItem = botResult.results.find(r => r.id === item.id);
       const clientItem = clientResult.results.find(r => r.id === item.id);
+      if (!botItem || !clientItem) {
+        return;
+      }
       const isDifferent = differences.some(d => d.id === item.id);
 
       comparisonHtml += renderDualCheckItem(botItem, clientItem, isDifferent, item.tooltip);
@@ -716,13 +778,6 @@ function renderDualCheckItem(botItem, clientItem, isDifferent, tooltipText = '')
  */
 function decodeHtmlEntities(text) {
   if (!text) return text;
-  const map = {
-    '&amp;': '&',
-    '&lt;': '<',
-    '&gt;': '>',
-    '&quot;': '"',
-    '&#039;': "'"
-  };
   // 역순으로 처리 (& 먼저 처리하면 &lt;가 꼬임)
   let result = text;
   result = result.replace(/&quot;/g, '"');
@@ -731,6 +786,62 @@ function decodeHtmlEntities(text) {
   result = result.replace(/&gt;/g, '>');
   result = result.replace(/&amp;/g, '&');
   return result;
+}
+
+function renderInlineMarkdown(text) {
+  const inlineCodes = [];
+  let processed = decodeHtmlEntities(String(text || ''));
+
+  processed = processed.replace(/`([^`\n]+)`/g, (_, code) => {
+    const placeholder = `__INLINE_CODE_${inlineCodes.length}__`;
+    inlineCodes.push(`<code>${escapeHtml(code)}</code>`);
+    return placeholder;
+  });
+
+  processed = escapeHtml(processed)
+    .replace(/\*\*([^*][\s\S]*?)\*\*/g, '<strong>$1</strong>')
+    .replace(/\*([^*\n][\s\S]*?)\*/g, '<em>$1</em>');
+
+  inlineCodes.forEach((html, index) => {
+    processed = processed.replace(`__INLINE_CODE_${index}__`, html);
+  });
+
+  return processed;
+}
+
+function renderMarkdownBlock(block) {
+  const lines = String(block || '')
+    .split('\n')
+    .map((line) => line.trim())
+    .filter((line, index, items) => line || items.length === 1);
+
+  if (lines.length === 1 && lines[0] === '---') {
+    return '<hr class="geo-improvement-hr">';
+  }
+
+  if (lines.length === 1 && lines[0].startsWith('### ')) {
+    return `<h4 class="geo-improvement-h4">${renderInlineMarkdown(lines[0].slice(4))}</h4>`;
+  }
+
+  if (lines.length === 1 && lines[0].startsWith('## ')) {
+    return `<h3 class="geo-improvement-h3">${renderInlineMarkdown(lines[0].slice(3))}</h3>`;
+  }
+
+  const listItems = lines.filter((line) => line.startsWith('- '));
+  const hasOnlyList = listItems.length === lines.length && listItems.length > 0;
+  const hasIntroPlusList = listItems.length === lines.length - 1 && lines[0] && !lines[0].startsWith('- ');
+
+  if (hasOnlyList || hasIntroPlusList) {
+    const intro = hasIntroPlusList ? `<p>${renderInlineMarkdown(lines[0])}</p>` : '';
+    const items = (hasOnlyList ? lines : lines.slice(1))
+      .filter((line) => line.startsWith('- '))
+      .map((line) => `<li>${renderInlineMarkdown(line.replace(/^-\s*/, ''))}</li>`)
+      .join('\n');
+
+    return `${intro}<ul class="geo-improvement-list">\n${items}\n</ul>`;
+  }
+
+  return `<p>${lines.map((line) => renderInlineMarkdown(line)).join('<br>')}</p>`;
 }
 
 /**
@@ -746,69 +857,28 @@ function formatMarkdownToHtml(markdown) {
 
   // 1. 코드 블록 추출 (```...```)
   const codeBlocks = [];
-  let processedMd = markdown.replace(/```(\w+)?\n([\s\S]*?)```/g, (match, lang, code) => {
+  const normalizedMarkdown = String(markdown || '').replace(/\r\n?/g, '\n');
+  let processedMd = normalizedMarkdown.replace(/```(\w+)?\n([\s\S]*?)```/g, (match, lang, code) => {
     const placeholder = `__CODE_BLOCK_${codeBlocks.length}__`;
-    codeBlocks.push({ lang: lang || 'plaintext', code: code.trim() });
+    codeBlocks.push({ lang: lang || 'plaintext', code: decodeHtmlEntities(code).trim() });
     return placeholder;
   });
 
   // 2. 기본 마크다운 변환
   let html = processedMd
-    // ### 제목 → <h4>
-    .replace(/^### (.+)$/gm, '<h4 class="geo-improvement-h4">$1</h4>')
-    // ## 제목 → <h3>
-    .replace(/^## (.+)$/gm, '<h3 class="geo-improvement-h3">$1</h3>')
-    // **굵은 글씨** → <strong>
-    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
-    // *이탤릭* → <em>
-    .replace(/\*(.+?)\*/g, '<em>$1</em>')
-    // `인라인 코드` → <code>
-    .replace(/`([^`]+)`/g, '<code>$1</code>')
-    // 구분선 (---)
-    .replace(/^---$/gm, '<hr class="geo-improvement-hr">')
-    // 줄바꿈을 <p>로 분리
     .split('\n\n')
-    .map(para => {
-      para = para.trim();
-      if (!para) return '';
+    .map((para) => {
+      const normalizedBlock = para.trim();
+      if (!normalizedBlock) {
+        return '';
+      }
 
       // 코드 블록 플레이스홀더는 그대로
-      if (para.startsWith('__CODE_BLOCK_')) {
-        return para;
+      if (/^__CODE_BLOCK_\d+__$/.test(normalizedBlock)) {
+        return normalizedBlock;
       }
 
-      // 불릿 리스트 처리 (- 로 시작하는 줄)
-      if (para.includes('\n- ')) {
-        const lines = para.split('\n');
-        const title = lines[0];
-        const items = lines.slice(1).filter(l => l.trim().startsWith('-'));
-
-        let listHtml = '';
-        if (title && !title.startsWith('-') && !title.startsWith('<')) {
-          listHtml += `<p>${title}</p>`;
-        } else if (title.startsWith('<')) {
-          listHtml += title;
-        }
-
-        if (items.length > 0) {
-          listHtml += '<ul class="geo-improvement-list">\n';
-          items.forEach(item => {
-            const text = item.replace(/^-\s*/, '');
-            listHtml += `<li>${text}</li>\n`;
-          });
-          listHtml += '</ul>';
-        }
-
-        return listHtml;
-      }
-
-      // 이미 HTML 태그로 시작하면 그대로
-      if (para.startsWith('<')) {
-        return para;
-      }
-
-      // 일반 문장
-      return `<p>${para}</p>`;
+      return renderMarkdownBlock(normalizedBlock);
     })
     .join('\n');
 
@@ -831,57 +901,6 @@ function formatImprovement(markdown) {
 }
 
 /**
- * AI 분석 섹션 표시 (fade-in 애니메이션)
- *
- * @param {HTMLElement} sectionElement - 섹션 DOM 요소
- * @param {string} content - 마크다운 콘텐츠
- */
-function displayAISection(sectionElement, content) {
-  if (!sectionElement || !sectionElement.style) {
-    console.error('Invalid sectionElement', sectionElement);
-    return;
-  }
-
-  // 마크다운 → HTML 변환
-  const html = formatMarkdownToHtml(content);
-
-  // fade-in 애니메이션 추가
-  sectionElement.style.opacity = '0';
-  sectionElement.innerHTML = html;
-
-  // 애니메이션 시작
-  requestAnimationFrame(() => {
-    sectionElement.style.transition = 'opacity 0.5s';
-    sectionElement.style.opacity = '1';
-  });
-}
-
-/**
- * 최상단으로 부드럽게 스크롤 + 점수 카드 fade-in
- *
- * @param {Object} elements - UI 요소 맵
- */
-function scrollToTop(elements) {
-  if (!elements.scoreCard) return;
-
-  // 1. 점수 카드 표시 (fade-in)
-  elements.scoreCard.style.display = 'block';
-  requestAnimationFrame(() => {
-    elements.scoreCard.style.transition = 'opacity 0.8s';
-    elements.scoreCard.style.opacity = '1';
-  });
-
-  // 2. 점수 카드 위치로 부드럽게 스크롤
-  setTimeout(() => {
-    elements.scoreCard.scrollIntoView({
-      behavior: 'smooth',
-      block: 'start'
-    });
-  }, 300);
-}
-
-
-/**
  * 로딩 상태 표시
  *
  * @param {Object} elements - UI 요소 맵
@@ -894,9 +913,17 @@ function displayLoading(elements, isLoading) {
     elements.loadingSpinner.style.display = 'flex';
     elements.resultSection.style.display = 'none';
     elements.runButton.disabled = true;
+    if (elements.introNote) {
+      elements.introNote.style.display = 'none';
+    }
   } else {
     elements.loadingSpinner.style.display = 'none';
     elements.runButton.disabled = false;
+    if (elements.introNote) {
+      const hasResult = elements.resultSection?.style.display === 'block';
+      const hasError = elements.errorMessage?.style.display === 'block';
+      elements.introNote.style.display = hasResult || hasError ? 'none' : 'block';
+    }
   }
 }
 
