@@ -66,7 +66,7 @@ async function testOpenRouter(apiKey, model) {
     headers: {
       Authorization: `Bearer ${apiKey}`,
       'Content-Type': 'application/json',
-      'HTTP-Referer': 'https://github.com/aibizsolution/web-helper-extension',
+      'HTTP-Referer': 'https://github.com/park-youngtack/chrome_ext_yt_ai',
       'X-Title': 'Provider Smoke Test'
     },
     body: JSON.stringify({
