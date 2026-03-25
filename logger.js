@@ -4,10 +4,30 @@
 
 const LEVEL_MAP = { DEBUG: 0, INFO: 1, WARN: 2, ERROR: 3 };
 const MAX_LOGS = 500; // ring-buffer 크기
+const GLOBAL_EVENT_TYPES = new Set(['ONERROR', 'UNHANDLED_REJECTION']);
+const OWN_SOURCE_HINTS = [
+  'background.js',
+  'content.js',
+  'sidepanel.js',
+  'logger.js',
+  'content/',
+  'modules/'
+];
 
 // 로그 ring-buffer (session storage에 저장)
 let logBuffer = [];
 let currentLogLevel = 'WARN'; // 기본값: 경고/오류는 항상 수집
+const EXTENSION_RUNTIME_PREFIX = (() => {
+  try {
+    if (typeof chrome !== 'undefined' && chrome.runtime && typeof chrome.runtime.getURL === 'function') {
+      return chrome.runtime.getURL('');
+    }
+  } catch (_) {
+    return '';
+  }
+
+  return '';
+})();
 
 // 초기화: storage에서 설정 로드
 export async function initLogger() {
@@ -67,6 +87,119 @@ function maskSensitive(data) {
   }
 
   return masked;
+}
+
+function normalizeNumber(value) {
+  const numericValue = Number(value);
+  return Number.isFinite(numericValue) ? numericValue : null;
+}
+
+function getGlobalNamespace() {
+  return window.location.pathname.includes('sidepanel') ? 'sidepanel' : 'content';
+}
+
+function getResourceTargetUrl(target) {
+  if (!target || typeof target !== 'object') {
+    return '';
+  }
+
+  if (typeof target.currentSrc === 'string' && target.currentSrc) {
+    return target.currentSrc;
+  }
+
+  if (typeof target.src === 'string' && target.src) {
+    return target.src;
+  }
+
+  if (typeof target.href === 'string' && target.href) {
+    return target.href;
+  }
+
+  return '';
+}
+
+function isOwnExtensionSource(text) {
+  const sourceText = String(text || '').trim();
+  if (!sourceText) {
+    return false;
+  }
+
+  if (EXTENSION_RUNTIME_PREFIX && sourceText.includes(EXTENSION_RUNTIME_PREFIX)) {
+    return true;
+  }
+
+  if (/(https?:\/\/|chrome-extension:\/\/)/i.test(sourceText)) {
+    return false;
+  }
+
+  return OWN_SOURCE_HINTS.some((hint) => sourceText.includes(hint));
+}
+
+function buildSourceText(parts) {
+  return parts
+    .map((part) => String(part || '').trim())
+    .filter(Boolean)
+    .join('\n');
+}
+
+function serializeReason(reason) {
+  if (reason instanceof Error) {
+    return buildSourceText([reason.message, reason.stack]);
+  }
+
+  if (typeof reason === 'string') {
+    return reason;
+  }
+
+  if (reason == null) {
+    return '';
+  }
+
+  try {
+    return JSON.stringify(reason);
+  } catch (_) {
+    return String(reason);
+  }
+}
+
+function shouldCaptureContentGlobalIssue(sourceText) {
+  return isOwnExtensionSource(sourceText);
+}
+
+function buildErrorEventContext(event) {
+  const target = event && typeof event === 'object' ? event.target : null;
+  const targetUrl = getResourceTargetUrl(target);
+
+  return {
+    filename: typeof event?.filename === 'string' ? event.filename : '',
+    lineno: normalizeNumber(event?.lineno),
+    colno: normalizeNumber(event?.colno),
+    targetTag: target?.tagName ? String(target.tagName).toLowerCase() : '',
+    targetUrl
+  };
+}
+
+export function shouldDisplayLogEntry(entry) {
+  if (!entry) {
+    return false;
+  }
+
+  if (String(entry.ns || '') !== 'content') {
+    return true;
+  }
+
+  if (!GLOBAL_EVENT_TYPES.has(String(entry.evt || ''))) {
+    return true;
+  }
+
+  const sourceText = buildSourceText([
+    entry.filename,
+    entry.targetUrl,
+    entry.err,
+    entry.stack,
+    entry.raw
+  ]);
+  return shouldCaptureContentGlobalIssue(sourceText);
 }
 
 /**
@@ -205,7 +338,7 @@ export async function getLogEntries(options = {}) {
   return logs
     .map((logLine) => parseStoredLogLine(logLine))
     .filter((entry) => {
-      if (!entry) {
+      if (!shouldDisplayLogEntry(entry)) {
         return false;
       }
 
@@ -240,12 +373,31 @@ export const logError = (ns, evt, msg, data, err) => log('ERROR', ns, evt, msg, 
 // 전역 에러 핸들러 (자동 등록)
 if (typeof window !== 'undefined') {
   window.addEventListener('error', (e) => {
-    const ns = window.location.pathname.includes('sidepanel') ? 'sidepanel' : 'content';
-    logError(ns, 'ONERROR', '전역 에러 발생', {}, e.error || e.message);
+    const ns = getGlobalNamespace();
+    const context = buildErrorEventContext(e);
+    const sourceText = buildSourceText([
+      context.filename,
+      context.targetUrl,
+      e?.message,
+      e?.error?.message,
+      e?.error?.stack
+    ]);
+
+    if (ns === 'content' && !shouldCaptureContentGlobalIssue(sourceText)) {
+      return;
+    }
+
+    logError(ns, 'ONERROR', '전역 에러 발생', context, e.error || e.message);
   });
 
   window.addEventListener('unhandledrejection', (e) => {
-    const ns = window.location.pathname.includes('sidepanel') ? 'sidepanel' : 'content';
+    const ns = getGlobalNamespace();
+    const reasonText = serializeReason(e?.reason);
+
+    if (ns === 'content' && !shouldCaptureContentGlobalIssue(reasonText)) {
+      return;
+    }
+
     logError(ns, 'UNHANDLED_REJECTION', '처리되지 않은 Promise 거부', {}, e.reason);
   });
 }

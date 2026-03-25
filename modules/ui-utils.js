@@ -524,7 +524,7 @@ export async function handleCopyLogs(mode = 'all') {
     }
 
     const logsToCopy = mode === 'errors'
-      ? allLogs.filter((logLine) => /\["ERROR"\]|\["WARN"\]|"level":"ERROR"|"level":"WARN"/.test(logLine))
+      ? (await getLogEntries({ levels: ['ERROR', 'WARN'] })).map((entry) => JSON.stringify(entry))
       : allLogs;
 
     if (logsToCopy.length === 0) {
