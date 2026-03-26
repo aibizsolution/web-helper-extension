@@ -142,6 +142,18 @@ function buildSourceText(parts) {
     .join('\n');
 }
 
+function extractHttpUrls(text) {
+  return String(text || '').match(/https?:\/\/[^\s"'`)>]+/gi) || [];
+}
+
+function hasExternalHttpUrl(text) {
+  return extractHttpUrls(text).some((url) => !isOwnExtensionSource(url));
+}
+
+function isContentSecurityPolicyViolation(text) {
+  return /content security policy|violates the following content security policy directive/i.test(String(text || ''));
+}
+
 function serializeReason(reason) {
   if (reason instanceof Error) {
     return buildSourceText([reason.message, reason.stack]);
@@ -162,8 +174,26 @@ function serializeReason(reason) {
   }
 }
 
-function shouldCaptureContentGlobalIssue(sourceText) {
-  return isOwnExtensionSource(sourceText);
+function shouldCaptureContentGlobalIssue(data) {
+  const issue = typeof data === 'string'
+    ? { err: data }
+    : (data || {});
+  const messageText = buildSourceText([issue.targetUrl, issue.err, issue.raw]);
+
+  if (issue.targetUrl && !isOwnExtensionSource(issue.targetUrl)) {
+    return false;
+  }
+
+  if (isContentSecurityPolicyViolation(messageText) && hasExternalHttpUrl(messageText)) {
+    return false;
+  }
+
+  return [
+    issue.filename,
+    issue.stack,
+    issue.err,
+    issue.raw
+  ].some((value) => isOwnExtensionSource(value));
 }
 
 function buildErrorEventContext(event) {
@@ -192,14 +222,7 @@ export function shouldDisplayLogEntry(entry) {
     return true;
   }
 
-  const sourceText = buildSourceText([
-    entry.filename,
-    entry.targetUrl,
-    entry.err,
-    entry.stack,
-    entry.raw
-  ]);
-  return shouldCaptureContentGlobalIssue(sourceText);
+  return shouldCaptureContentGlobalIssue(entry);
 }
 
 /**
@@ -375,15 +398,13 @@ if (typeof window !== 'undefined') {
   window.addEventListener('error', (e) => {
     const ns = getGlobalNamespace();
     const context = buildErrorEventContext(e);
-    const sourceText = buildSourceText([
-      context.filename,
-      context.targetUrl,
-      e?.message,
-      e?.error?.message,
-      e?.error?.stack
-    ]);
+    const issue = {
+      ...context,
+      err: buildSourceText([e?.message, e?.error?.message]),
+      stack: e?.error?.stack || ''
+    };
 
-    if (ns === 'content' && !shouldCaptureContentGlobalIssue(sourceText)) {
+    if (ns === 'content' && !shouldCaptureContentGlobalIssue(issue)) {
       return;
     }
 
@@ -392,9 +413,12 @@ if (typeof window !== 'undefined') {
 
   window.addEventListener('unhandledrejection', (e) => {
     const ns = getGlobalNamespace();
-    const reasonText = serializeReason(e?.reason);
+    const issue = {
+      err: serializeReason(e?.reason),
+      stack: e?.reason instanceof Error ? e.reason.stack : ''
+    };
 
-    if (ns === 'content' && !shouldCaptureContentGlobalIssue(reasonText)) {
+    if (ns === 'content' && !shouldCaptureContentGlobalIssue(issue)) {
       return;
     }
 

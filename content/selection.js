@@ -320,6 +320,29 @@
       return typeof text === 'string' ? text.replace(/\s+/g, ' ').trim() : '';
     }
 
+    function getSelectionTextFromRange(range) {
+      if (!range) {
+        return '';
+      }
+
+      // Some pages emit browser-level CSP/font noise while selection.toString() touches layout text.
+      // Reading cloned fragment text keeps the selection feature working without pulling that path in first.
+      try {
+        const fragment = range.cloneContents();
+        const fragmentText = normalizeSelectionText(fragment.textContent || '');
+        if (fragmentText) {
+          return fragmentText;
+        }
+      } catch (_) {
+      }
+
+      try {
+        return normalizeSelectionText(range.toString());
+      } catch (_) {
+        return '';
+      }
+    }
+
     function isSupportedSelectionLength(text) {
       return Boolean(text && text.length >= 2 && text.length <= 800);
     }
@@ -494,12 +517,16 @@
 
     function readWindowSelection(anchor) {
       const selection = window.getSelection();
-      const text = selection ? normalizeSelectionText(selection.toString()) : '';
-      if (!selection || selection.rangeCount === 0 || !isSupportedSelectionLength(text)) {
+      if (!selection || selection.rangeCount === 0) {
         return null;
       }
 
       const range = selection.getRangeAt(0);
+      const text = getSelectionTextFromRange(range);
+      if (!isSupportedSelectionLength(text)) {
+        return null;
+      }
+
       const rect = pickBestClientRect(range.getClientRects(), anchor) || normalizeRect(range.getBoundingClientRect());
       if (!rect || (!rect.width && !rect.height)) {
         return null;
