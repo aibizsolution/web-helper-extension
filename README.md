@@ -38,7 +38,8 @@
 ## 개발 기준
 - Node: `22` LTS
 - 이 확장은 실행 자체에는 별도 빌드가 필요 없습니다.
-- 기본 검증 명령은 `npm run check`입니다.
+- 기본 검증 명령은 `npm run check`이며, JS 문법 검사와 ESLint를 함께 수행합니다.
+- lint만 빠르게 돌리려면 `npm run lint`를 사용합니다.
 - provider smoke test는 `.env.providers.local`이 준비된 경우에만 `npm run test:providers`를 사용합니다.
 
 ## 개발 시작
@@ -48,7 +49,8 @@
 4. 우측 상단 `개발자 모드`를 켭니다.
 5. `압축해제된 확장 프로그램 로드`를 눌러 이 폴더를 선택합니다.
 6. 기본 검증으로 `npm run check`를 실행합니다.
-7. provider 연동을 바꿨다면 `.env.providers.example`을 참고해 `.env.providers.local`을 준비한 뒤 `npm run test:providers`를 실행합니다.
+7. lint만 반복 확인하고 싶다면 `npm run lint`를 실행합니다.
+8. provider 연동을 바꿨다면 `.env.providers.example`을 참고해 `.env.providers.local`을 준비한 뒤 `npm run test:providers`를 실행합니다.
 
 ## 지원 AI provider
 - `OpenRouter`

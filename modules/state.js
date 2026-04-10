@@ -13,7 +13,7 @@ export let permissionGranted = false;
 export let settingsChanged = false;
 export let originalSettings = {};
 export let lastTranslateMode = 'cache';
-export let lastHistoryCompletionMeta = { signature: null, ts: 0 };
+export let lastHistoryCompletionMeta = { runId: null, ts: 0 };
 export let translationState = createDefaultTranslationState();
 
 export const portsByTab = new Map();
@@ -49,6 +49,7 @@ function syncActiveBrowserContext() {
 
 export function createDefaultTranslationState() {
   return {
+    runId: '',
     state: 'inactive',
     phase: 'idle',
     priority: 0,
@@ -65,6 +66,9 @@ export function createDefaultTranslationState() {
     activeRequests: 0,
     etaMs: 0,
     activeMs: 0,
+    failedBatches: 0,
+    failedSegments: 0,
+    lastError: '',
     provider: '',
     model: '',
     profile: 'fast',
@@ -151,7 +155,7 @@ export function getLastHistoryCompletionMeta() {
 }
 
 export function setLastHistoryCompletionMeta(meta) {
-  lastHistoryCompletionMeta = meta || { signature: null, ts: 0 };
+  lastHistoryCompletionMeta = meta || { runId: null, ts: 0 };
 }
 
 export function setActivePanelTab(tabName) {

@@ -332,7 +332,7 @@ export function updateUI(hasPermission = true) {
   const translateSection = document.getElementById('translateSection');
   const hasConfiguredApiKey = translateSection?.dataset.hasApiKey === 'true';
   const activeProfile = currentState.profile === 'precise' ? 'precise' : 'fast';
-  const isTranslatedState = ['analyzing', 'translating', 'completed', 'error'].includes(state);
+  const isTranslatedState = ['analyzing', 'translating', 'completed', 'completed_with_errors', 'error'].includes(state);
   const fastToggleActive = hasPermission && activeProfile === 'fast' && isTranslatedState;
   const preciseToggleActive = hasPermission && activeProfile === 'precise' && isTranslatedState;
 
@@ -342,6 +342,8 @@ export function updateUI(hasPermission = true) {
     setStatusBadge(statusBadge, phase === 'visible' ? '우선 표시 완료' : '번역 중', 'status-badge active pulse');
   } else if (state === 'completed') {
     setStatusBadge(statusBadge, '번역 완료', 'status-badge active');
+  } else if (state === 'completed_with_errors') {
+    setStatusBadge(statusBadge, '일부 실패', 'status-badge');
   } else if (state === 'restored') {
     setStatusBadge(statusBadge, '원문 보기', 'status-badge restored');
   } else if (state === 'error') {
@@ -390,7 +392,12 @@ export function updateUI(hasPermission = true) {
   setText('cachedCount', String((cacheHits || cachedCount || 0).toLocaleString()));
   setText('batchCountText', batchCount > 0 ? `${batchesDone}/${batchCount}` : '0');
   setText('elapsedTime', activeMs > 0 ? formatTime(Math.floor(activeMs / 1000)) : '0s');
-  setText('phaseText', formatPhase(phase, priority, visibleValue, totalValue));
+  setText(
+    'phaseText',
+    state === 'completed_with_errors'
+      ? `일부 배치 실패 (${currentState.failedBatches || 0}건)`
+      : formatPhase(phase, priority, visibleValue, totalValue)
+  );
 
   const batchInfoEl = document.getElementById('batchInfo');
   const batchListEl = document.getElementById('batchList');

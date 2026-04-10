@@ -19,7 +19,9 @@
 
 ## 명령 설명
 - `npm run check`
-  - 루트 JS 파일과 `content/`, `modules/`, `sidepanel/`, `scripts/` 아래 `.js`, `.mjs` 문법을 검사합니다.
+  - 루트 JS 파일과 `content/`, `modules/`, `sidepanel/`, `scripts/` 아래 `.js`, `.mjs` 문법을 검사하고, ESLint 기준도 함께 확인합니다.
+- `npm run lint`
+  - ESLint flat config 기준으로 브라우저/확장 코드와 Node 스크립트를 점검합니다.
 - `npm run test:providers`
   - `.env.providers.local`에 키가 있는 provider만 실제 API smoke test를 수행합니다.
 

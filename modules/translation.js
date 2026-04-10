@@ -41,6 +41,12 @@ import {
 import { getActiveTranslationConfig, getConfiguredProviders, updateActiveTranslationConfig } from './storage.js';
 
 const EXPECTED_CONTENT_RUNTIME_VERSION = '2026-03-13-content-v4';
+const CONTENT_READY_STATUS = {
+  READY: 'ready',
+  MISSING: 'missing',
+  VERSION_MISMATCH: 'version_mismatch'
+};
+const CONTENT_RELOAD_TIMEOUT_MS = 20000;
 
 function currentTabIdValue() {
   return getCurrentTabId();
@@ -85,11 +91,22 @@ function isRestoreToggleState(profile) {
     return false;
   }
 
-  return ['analyzing', 'translating', 'completed', 'error'].includes(currentState.state);
+  return ['analyzing', 'translating', 'completed', 'completed_with_errors', 'error'].includes(currentState.state);
 }
 
 async function handleTranslationAction(profile) {
+  logInfo('sidepanel', 'TRANSLATION_ACTION_CLICKED', '번역 액션 버튼 클릭', {
+    requestedProfile: profile,
+    currentState: translationStateValue().state,
+    currentProfile: translationStateValue().profile,
+    tabId: currentTabIdValue()
+  });
+
   if (isRestoreToggleState(profile)) {
+    logInfo('sidepanel', 'TRANSLATION_ACTION_RESTORE', '번역 버튼이 원본 보기로 전환되어 복원 실행', {
+      requestedProfile: profile,
+      tabId: currentTabIdValue()
+    });
     await handleRestore();
     return;
   }
@@ -284,7 +301,7 @@ export async function handleTabChange(tab) {
   }
 
   const savedState = activeTabId ? translationStateByTab.get(activeTabId) : null;
-  if (savedState && (savedState.state === 'translating' || savedState.state === 'completed' || savedState.state === 'restored')) {
+  if (savedState && (savedState.state === 'translating' || savedState.state === 'completed' || savedState.state === 'completed_with_errors' || savedState.state === 'restored')) {
     setTranslationState({ ...savedState, batches: [...(savedState.batches || [])] });
   } else {
     initializeTranslationState();
@@ -413,43 +430,163 @@ export async function handleRequestPermission() {
 }
 
 async function ensureContentScriptReady(tabId) {
-  try {
-    const ping = await chrome.tabs.sendMessage(tabId, { type: ACTIONS.PING });
+  const resolveReadyState = async (ping, logMessage) => {
     if (ping?.ok && ping?.version === EXPECTED_CONTENT_RUNTIME_VERSION) {
       await chrome.tabs.sendMessage(tabId, { action: ACTIONS.GET_PROGRESS_V2 });
-      return true;
+      logInfo('sidepanel', 'CONTENT_READY_CONFIRMED', 'content script 준비 확인', {
+        tabId,
+        version: ping.version
+      });
+      return { status: CONTENT_READY_STATUS.READY };
     }
 
     if (ping?.ok) {
-      logInfo('sidepanel', 'CONTENT_VERSION_MISMATCH', '페이지 content script 버전 불일치', {
+      logInfo('sidepanel', 'CONTENT_VERSION_MISMATCH', logMessage, {
         tabId,
         expectedVersion: EXPECTED_CONTENT_RUNTIME_VERSION,
         actualVersion: ping?.version || 'unknown'
       });
-      return false;
+      return {
+        status: CONTENT_READY_STATUS.VERSION_MISMATCH,
+        actualVersion: ping?.version || 'unknown'
+      };
     }
-  } catch (_) {
-    try {
-      await chrome.scripting.executeScript({
-        target: { tabId },
-        files: CONTENT_SCRIPT_FILES
-      });
-      await new Promise((resolve) => setTimeout(resolve, 120));
-      const ping = await chrome.tabs.sendMessage(tabId, { type: ACTIONS.PING });
-      if (!ping?.ok || ping?.version !== EXPECTED_CONTENT_RUNTIME_VERSION) {
-        logInfo('sidepanel', 'CONTENT_VERSION_MISMATCH', '재주입 후에도 content script 버전 불일치', {
-          tabId,
-          expectedVersion: EXPECTED_CONTENT_RUNTIME_VERSION,
-          actualVersion: ping?.version || 'unknown'
-        });
-        return false;
+
+    return null;
+  };
+
+  try {
+    const ping = await chrome.tabs.sendMessage(tabId, { type: ACTIONS.PING });
+    logInfo('sidepanel', 'CONTENT_PING_RESPONSE', '기존 content script ping 응답 확인', {
+      tabId,
+      ok: ping?.ok === true,
+      version: ping?.version || 'unknown'
+    });
+    const readyState = await resolveReadyState(ping, '페이지 content script 버전 불일치');
+    if (readyState) {
+      return readyState;
+    }
+  } catch (error) {
+    logDebug('sidepanel', 'CONTENT_PING_FAILED', '기존 content script ping 실패, 재주입 시도', {
+      tabId,
+      error: error?.message || '알 수 없음'
+    }, error);
+  }
+
+  try {
+    await chrome.scripting.executeScript({
+      target: { tabId },
+      files: CONTENT_SCRIPT_FILES
+    });
+    await new Promise((resolve) => setTimeout(resolve, 120));
+
+    const ping = await chrome.tabs.sendMessage(tabId, { type: ACTIONS.PING });
+    logInfo('sidepanel', 'CONTENT_REINJECT_PING_RESPONSE', 'content script 재주입 후 ping 응답 확인', {
+      tabId,
+      ok: ping?.ok === true,
+      version: ping?.version || 'unknown'
+    });
+    const readyState = await resolveReadyState(ping, '재주입 후에도 content script 버전 불일치');
+    if (readyState) {
+      return readyState;
+    }
+
+    logInfo('sidepanel', 'CONTENT_READY_MISSING', '재주입 후에도 content script 응답이 준비되지 않음', {
+      tabId
+    });
+    return { status: CONTENT_READY_STATUS.MISSING };
+  } catch (error) {
+    logError('sidepanel', 'CONTENT_NOT_READY', 'Content script 준비 실패', { tabId }, error);
+    return { status: CONTENT_READY_STATUS.MISSING, error };
+  }
+}
+
+function buildTranslationStartMessage(activeConfig, selectedProfile) {
+  return {
+    action: selectedProfile === 'precise'
+      ? ACTIONS.START_PRECISE_RETRANSLATION
+      : ACTIONS.START_PAGE_TRANSLATION,
+    provider: activeConfig.provider,
+    apiKey: activeConfig.apiKey,
+    model: activeConfig.model,
+    profile: activeConfig.profile
+  };
+}
+
+function waitForTabReload(tabId, timeoutMs = CONTENT_RELOAD_TIMEOUT_MS) {
+  return new Promise((resolve, reject) => {
+    let finished = false;
+    const timeoutId = setTimeout(() => {
+      if (!finished) {
+        chrome.tabs.onUpdated.removeListener(listener);
+        reject(new Error('TAB_RELOAD_TIMEOUT'));
       }
-      await chrome.tabs.sendMessage(tabId, { action: ACTIONS.GET_PROGRESS_V2 });
-      return true;
-    } catch (error) {
-      logError('sidepanel', 'CONTENT_NOT_READY', 'Content script 준비 실패', { tabId }, error);
+    }, timeoutMs);
+
+    const listener = (updatedTabId, changeInfo) => {
+      if (updatedTabId === tabId && changeInfo.status === 'complete') {
+        finished = true;
+        clearTimeout(timeoutId);
+        chrome.tabs.onUpdated.removeListener(listener);
+        resolve();
+      }
+    };
+
+    chrome.tabs.onUpdated.addListener(listener);
+  });
+}
+
+async function sendTranslationStartRequest(tabId, activeConfig, selectedProfile) {
+  if (!getPortForTab(tabId)) {
+    connectToContentScript(tabId);
+  }
+
+  translateModeByTab.set(tabId, selectedProfile === 'precise' ? 'fresh' : 'fast');
+  const startMessage = buildTranslationStartMessage(activeConfig, selectedProfile);
+  logInfo('sidepanel', 'TRANSLATION_START_REQUEST', '페이지 번역 시작 메시지 전송', {
+    tabId,
+    action: startMessage.action,
+    requestedProfile: selectedProfile,
+    configProfile: activeConfig.profile,
+    provider: startMessage.provider,
+    model: startMessage.model
+  });
+
+  const response = await chrome.tabs.sendMessage(tabId, startMessage);
+  logInfo('sidepanel', 'TRANSLATION_START_RESPONSE', '페이지 번역 시작 메시지 응답 수신', {
+    tabId,
+    action: startMessage.action,
+    success: response?.success === true
+  });
+
+  logInfo('sidepanel', 'TRANSLATION_START', '페이지 번역 시작', {
+    tabId,
+    provider: selectedProfile === 'precise' ? activeConfig.provider : FAST_PAGE_PROVIDER,
+    model: selectedProfile === 'precise' ? activeConfig.model : FAST_PAGE_MODEL,
+    profile: selectedProfile
+  });
+}
+
+async function retryTranslationAfterReload(tabId, activeConfig, selectedProfile) {
+  try {
+    showToast('확장 업데이트를 적용하는 중입니다. 페이지를 새로고침한 뒤 자동으로 다시 번역합니다.');
+    await chrome.tabs.reload(tabId);
+    await waitForTabReload(tabId);
+    autoTranslateTriggeredByTab.set(tabId, true);
+
+    const readyState = await ensureContentScriptReady(tabId);
+    if (readyState.status !== CONTENT_READY_STATUS.READY) {
       return false;
     }
+
+    await sendTranslationStartRequest(tabId, activeConfig, selectedProfile);
+    return true;
+  } catch (error) {
+    logError('sidepanel', 'CONTENT_RELOAD_RETRY_FAILED', 'content script 재시도 실패', {
+      tabId,
+      profile: selectedProfile
+    }, error);
+    return false;
   }
 }
 
@@ -494,66 +631,76 @@ export async function handleStartPageTranslation(profile = DEFAULT_PROFILE) {
     return;
   }
 
-  const tab = await chrome.tabs.get(activeTabId);
-  const supportType = getSupportType(tab.url || '');
-  await checkPermissions(tab);
+  try {
+    const tab = await chrome.tabs.get(activeTabId);
+    const supportType = getSupportType(tab.url || '');
+    logInfo('sidepanel', 'TRANSLATION_START_REQUESTED', '페이지 번역 시작 요청 진입', {
+      tabId: activeTabId,
+      requestedProfile: profile,
+      url: tab.url || '',
+      supportType
+    });
+    await checkPermissions(tab);
 
-  if (supportType === 'unsupported') {
-    showToast('이 페이지는 브라우저 정책상 번역을 지원하지 않습니다.', 'error');
-    return;
+    if (supportType === 'unsupported') {
+      showToast('이 페이지는 브라우저 정책상 번역을 지원하지 않습니다.', 'error');
+      return;
+    }
+    if (supportType === 'file' && !permissionGrantedValue()) {
+      showToast('파일 URL 접근 권한을 허용해야 번역할 수 있습니다.', 'error');
+      return;
+    }
+    if (supportType === 'requestable' && !permissionGrantedValue()) {
+      showToast('이 사이트를 번역하려면 접근 권한이 필요합니다.', 'error');
+      return;
+    }
+
+    const config = await getActiveTranslationConfig();
+    const provider = document.getElementById('translationProviderSelect')?.value || config.provider;
+    const model = document.getElementById('translationModelSelect')?.value || config.model;
+    const selectedProfile = profile || config.profile || DEFAULT_PROFILE;
+
+    await updateActiveTranslationConfig({ provider, model, profile: selectedProfile });
+    const activeConfig = await getActiveTranslationConfig();
+    logInfo('sidepanel', 'TRANSLATION_CONFIG_RESOLVED', '번역 시작 구성 확정', {
+      tabId: activeTabId,
+      requestedProfile: selectedProfile,
+      provider: activeConfig.provider,
+      model: activeConfig.model,
+      profile: activeConfig.profile,
+      hasApiKey: activeConfig.hasApiKey
+    });
+
+    if (selectedProfile === 'precise' && !activeConfig.hasApiKey) {
+      showToast('설정 탭에서 프로바이더 API Key를 먼저 입력해주세요.', 'error');
+      return;
+    }
+
+    const readyState = await ensureContentScriptReady(activeTabId);
+    logInfo('sidepanel', 'CONTENT_READY_STATE', '번역 시작 전 content 준비 상태 확인 완료', {
+      tabId: activeTabId,
+      requestedProfile: selectedProfile,
+      status: readyState.status,
+      actualVersion: readyState.actualVersion || ''
+    });
+    if (readyState.status === CONTENT_READY_STATUS.VERSION_MISMATCH) {
+      const retried = await retryTranslationAfterReload(activeTabId, activeConfig, selectedProfile);
+      if (!retried) {
+        showToast('확장 업데이트 적용을 위해 현재 페이지를 한 번 새로고침한 뒤 다시 번역해주세요.', 'error');
+      }
+      return;
+    }
+
+    if (readyState.status !== CONTENT_READY_STATUS.READY) {
+      showToast('확장 업데이트 적용을 위해 현재 페이지를 한 번 새로고침한 뒤 다시 번역해주세요.', 'error');
+      return;
+    }
+
+    await sendTranslationStartRequest(activeTabId, activeConfig, selectedProfile);
+  } catch (error) {
+    logError('sidepanel', 'TRANSLATION_START_FAILED', '페이지 번역 시작 실패', { tabId: activeTabId }, error);
+    showToast(`페이지 번역 시작 중 오류가 발생했습니다: ${error.message}`, 'error');
   }
-  if (supportType === 'file' && !permissionGrantedValue()) {
-    showToast('파일 URL 접근 권한을 허용해야 번역할 수 있습니다.', 'error');
-    return;
-  }
-  if (supportType === 'requestable' && !permissionGrantedValue()) {
-    showToast('이 사이트를 번역하려면 접근 권한이 필요합니다.', 'error');
-    return;
-  }
-
-  const config = await getActiveTranslationConfig();
-  const provider = document.getElementById('translationProviderSelect')?.value || config.provider;
-  const model = document.getElementById('translationModelSelect')?.value || config.model;
-  const selectedProfile = profile || config.profile || DEFAULT_PROFILE;
-
-  await updateActiveTranslationConfig({ provider, model, profile: selectedProfile });
-  const activeConfig = await getActiveTranslationConfig();
-
-  if (selectedProfile === 'precise' && !activeConfig.hasApiKey) {
-    showToast('설정 탭에서 프로바이더 API Key를 먼저 입력해주세요.', 'error');
-    return;
-  }
-
-  const isReady = await ensureContentScriptReady(activeTabId);
-  if (!isReady) {
-    showToast('확장 업데이트 적용을 위해 현재 페이지를 한 번 새로고침한 뒤 다시 번역해주세요.', 'error');
-    return;
-  }
-
-  if (!getPortForTab(activeTabId)) {
-    connectToContentScript(activeTabId);
-  }
-
-  translateModeByTab.set(activeTabId, selectedProfile === 'precise' ? 'fresh' : 'fast');
-
-  const action = selectedProfile === 'precise'
-    ? ACTIONS.START_PRECISE_RETRANSLATION
-    : ACTIONS.START_PAGE_TRANSLATION;
-
-  await chrome.tabs.sendMessage(activeTabId, {
-    action,
-    provider: activeConfig.provider,
-    apiKey: activeConfig.apiKey,
-    model: activeConfig.model,
-    profile: activeConfig.profile
-  });
-
-  logInfo('sidepanel', 'TRANSLATION_START', '페이지 번역 시작', {
-    tabId: activeTabId,
-    provider: selectedProfile === 'precise' ? activeConfig.provider : FAST_PAGE_PROVIDER,
-    model: selectedProfile === 'precise' ? activeConfig.model : FAST_PAGE_MODEL,
-    profile: selectedProfile
-  });
 }
 
 /**

@@ -61,11 +61,12 @@
     }
 
     async function translateDocumentTitle(configOrApiKey, modelOrUseCache, useCacheOrOriginalTitle, originalTitleOrStatus, maybeGetProgressStatus){
+      let getProgressStatus = null;
+
       try{
         let config = null;
         let useCache = true;
         let originalTitle = '';
-        let getProgressStatus = null;
 
         if (configOrApiKey && typeof configOrApiKey === 'object') {
           config = normalizeConfig(configOrApiKey);

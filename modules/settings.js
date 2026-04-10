@@ -8,6 +8,7 @@
  */
 
 import { logInfo, logError, logDebug } from '../logger.js';
+import { ACTIONS } from './constants.js';
 import {
   getCurrentTabId,
   getOriginalSettings,
@@ -33,6 +34,8 @@ const OPENROUTER_API_INPUT_ID = 'openRouterApiKey';
 const OPENROUTER_KEY_STATUS_DEBOUNCE_MS = 400;
 const PROVIDER_API_INPUT_IDS = Object.values(PROVIDER_CATALOG).map((provider) => provider.apiKeyStorageKey);
 let sidePanelShortcutPollTimer = null;
+let sidePanelShortcutFocusHandler = null;
+let sidePanelShortcutVisibilityHandler = null;
 let lastRenderedShortcutLabel = '';
 let lastRenderedShortcutAssigned = false;
 let openRouterKeyStatusTimer = null;
@@ -103,7 +106,6 @@ export function initSettingsTab() {
   });
 
   document.getElementById('openShortcutSettingsBtn')?.addEventListener('click', handleOpenShortcutSettings);
-  startSidePanelShortcutWatcher();
 }
 
 function handleSettingsFieldChanged(event) {
@@ -128,6 +130,7 @@ function handleSettingsFieldChanged(event) {
  */
 export async function loadSettings() {
   try {
+    startSidePanelShortcutWatcher();
     const formSettings = await getSettingsForForm();
 
     setOriginalSettings({ ...formSettings });
@@ -149,6 +152,12 @@ export async function loadSettings() {
   } catch (error) {
     logError('sidepanel', 'SETTINGS_LOAD_ERROR', '설정 로드 실패', {}, error);
   }
+}
+
+export function cleanupSettingsTab() {
+  stopSidePanelShortcutWatcher();
+  clearOpenRouterKeyStatusTimer();
+  openRouterKeyStatusRequestId += 1;
 }
 
 function setInputValue(id, value) {
@@ -570,14 +579,78 @@ function startSidePanelShortcutWatcher() {
     void refreshIfNeeded();
   }, SIDE_PANEL_SHORTCUT_POLL_MS);
 
-  window.addEventListener('focus', () => {
+  sidePanelShortcutFocusHandler = () => {
     void refreshIfNeeded({ force: true });
-  });
+  };
+  window.addEventListener('focus', sidePanelShortcutFocusHandler);
 
-  document.addEventListener('visibilitychange', () => {
+  sidePanelShortcutVisibilityHandler = () => {
     if (!document.hidden) {
       void refreshIfNeeded({ force: true });
     }
+  };
+  document.addEventListener('visibilitychange', sidePanelShortcutVisibilityHandler);
+}
+
+function stopSidePanelShortcutWatcher() {
+  if (sidePanelShortcutPollTimer) {
+    window.clearInterval(sidePanelShortcutPollTimer);
+    sidePanelShortcutPollTimer = null;
+  }
+
+  if (sidePanelShortcutFocusHandler) {
+    window.removeEventListener('focus', sidePanelShortcutFocusHandler);
+    sidePanelShortcutFocusHandler = null;
+  }
+
+  if (sidePanelShortcutVisibilityHandler) {
+    document.removeEventListener('visibilitychange', sidePanelShortcutVisibilityHandler);
+    sidePanelShortcutVisibilityHandler = null;
+  }
+}
+
+async function sendCacheMessage(tabId, action) {
+  if (typeof tabId !== 'number') {
+    return { success: false, reason: 'missing_tab' };
+  }
+
+  try {
+    await chrome.tabs.get(tabId);
+  } catch (error) {
+    return {
+      success: false,
+      reason: 'stale_tab',
+      error: error?.message || '탭을 찾을 수 없습니다.'
+    };
+  }
+
+  return await new Promise((resolve) => {
+    chrome.tabs.sendMessage(tabId, { action }, (response) => {
+      if (chrome.runtime.lastError) {
+        resolve({
+          success: false,
+          reason: 'message_error',
+          error: chrome.runtime.lastError.message
+        });
+        return;
+      }
+
+      if (!response) {
+        resolve({ success: false, reason: 'empty_response', error: '빈 응답' });
+        return;
+      }
+
+      if (response.success !== true) {
+        resolve({
+          success: false,
+          reason: 'request_failed',
+          error: response.error || '알 수 없는 오류'
+        });
+        return;
+      }
+
+      resolve({ success: true, response });
+    });
   });
 }
 
@@ -587,27 +660,20 @@ function startSidePanelShortcutWatcher() {
  */
 export async function getPageCacheStatus() {
   try {
-    return await new Promise((resolve) => {
-      const activeTabId = getCurrentTabId();
-      if (!activeTabId) {
-        resolve({ count: 0, size: 0 });
-        return;
-      }
+    const activeTabId = getCurrentTabId();
+    if (!activeTabId) {
+      return { count: 0, size: 0 };
+    }
 
-      chrome.tabs.sendMessage(activeTabId, { action: 'getCacheStatus' }, (response) => {
-        if (chrome.runtime.lastError) {
-          resolve({ count: 0, size: 0 });
-          return;
-        }
+    const result = await sendCacheMessage(activeTabId, ACTIONS.GET_CACHE_STATUS);
+    if (!result.success) {
+      return { count: 0, size: 0 };
+    }
 
-        if (response?.success) {
-          resolve({ count: response.count || 0, size: response.size || 0 });
-          return;
-        }
-
-        resolve({ count: 0, size: 0 });
-      });
-    });
+    return {
+      count: result.response.count || 0,
+      size: result.response.size || 0
+    };
   } catch (error) {
     logError('sidepanel', 'PAGE_CACHE_STATUS_ERROR', '캐시 조회 실패', {}, error);
     return { count: 0, size: 0 };
@@ -674,27 +740,19 @@ export async function handleClearPageCache() {
 
     await ensurePageContentScript(activeTabId);
 
-    chrome.tabs.sendMessage(activeTabId, { action: 'clearCacheForDomain' }, (response) => {
-      if (chrome.runtime.lastError) {
-        logError('sidepanel', 'PAGE_CACHE_CLEAR_MSG_ERROR', '캐시 삭제 메시지 실패', {
-          tabId: activeTabId,
-          error: chrome.runtime.lastError.message
-        }, chrome.runtime.lastError);
-        showToast('캐시 삭제 중 오류가 발생했습니다.', 'error');
-        return;
-      }
+    const result = await sendCacheMessage(activeTabId, ACTIONS.CLEAR_CACHE_FOR_DOMAIN);
+    if (result.success) {
+      showToast('이 페이지의 캐시가 삭제되었습니다.');
+      void updatePageCacheStatus();
+      return;
+    }
 
-      if (response?.success) {
-        showToast('이 페이지의 캐시가 삭제되었습니다.');
-        updatePageCacheStatus();
-      } else {
-        logError('sidepanel', 'PAGE_CACHE_CLEAR_FAILED', '캐시 삭제 실패', {
-          tabId: activeTabId,
-          responseError: response?.error || 'unknown'
-        });
-        showToast(`캐시 삭제 중 오류가 발생했습니다.${response?.error ? ` (${response.error})` : ''}`, 'error');
-      }
+    logError('sidepanel', 'PAGE_CACHE_CLEAR_FAILED', '캐시 삭제 실패', {
+      tabId: activeTabId,
+      reason: result.reason,
+      responseError: result.error || 'unknown'
     });
+    showToast(`캐시 삭제 중 오류가 발생했습니다.${result.error ? ` (${result.error})` : ''}`, 'error');
   } catch (error) {
     logError('sidepanel', 'PAGE_CACHE_CLEAR_ERROR', '캐시 삭제 실패', {}, error);
     showToast('캐시 삭제 중 오류가 발생했습니다: ' + error.message, 'error');

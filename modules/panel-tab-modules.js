@@ -1,7 +1,7 @@
 import { DEFAULT_TRANSLATE_PANEL } from './panel-constants.js';
 import { getActiveTranslateSubtab, switchTranslateSubtab } from './ui-utils.js';
 import { initHistoryTab } from './history.js';
-import { initSettingsTab, loadSettings, updatePageCacheStatus } from './settings.js';
+import { cleanupSettingsTab, initSettingsTab, loadSettings, updatePageCacheStatus } from './settings.js';
 import { initializeSearchTab } from './search.js';
 import { initQuickTranslateTab } from './quick-translate.js';
 import { initRecurringTab } from './recurring.js';
@@ -84,6 +84,9 @@ export function createPanelTabModules() {
       },
       onEnter: async () => {
         await loadSettings();
+      },
+      onLeave: async () => {
+        cleanupSettingsTab();
       },
       refresh: async () => {
         await loadSettings();

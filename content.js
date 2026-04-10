@@ -25,9 +25,9 @@ if (typeof window.__WPT_INITIALIZED !== 'undefined') {
   const CONST = WPT.Constants || {
     PORT_NAMES: { PANEL: 'panel' },
     PORT_MESSAGES: { PROGRESS: 'progress', CANCEL_TRANSLATION: 'CANCEL_TRANSLATION' },
-    ACTIONS: {
-      PING: 'PING',
-      START_PAGE_TRANSLATION: 'START_PAGE_TRANSLATION',
+      ACTIONS: {
+        PING: 'PING',
+        START_PAGE_TRANSLATION: 'START_PAGE_TRANSLATION',
       START_PRECISE_RETRANSLATION: 'START_PRECISE_RETRANSLATION',
       RESTORE_PAGE_ORIGINAL: 'RESTORE_PAGE_ORIGINAL',
       TRANSLATE_SELECTION: 'TRANSLATE_SELECTION',
@@ -40,11 +40,12 @@ if (typeof window.__WPT_INITIALIZED !== 'undefined') {
       RUN_CLIENT_GEO_AUDIT: 'RUN_CLIENT_GEO_AUDIT',
       TRANSLATE_FULL_PAGE: 'translateFullPage',
       RESTORE_ORIGINAL: 'restoreOriginal',
-      GET_TRANSLATION_STATE: 'getTranslationState',
-      GET_TRANSLATED_TITLE: 'getTranslatedTitle',
-      GET_CACHE_STATUS: 'getCacheStatus',
-      CLEAR_CACHE_FOR_DOMAIN: 'clearCacheForDomain'
-    },
+        GET_TRANSLATION_STATE: 'getTranslationState',
+        GET_TRANSLATED_TITLE: 'getTranslatedTitle',
+        GET_CACHE_STATUS: 'getCacheStatus',
+        CLEAR_CACHE_FOR_DOMAIN: 'clearCacheForDomain',
+        APPEND_LOG_RECORD: 'APPEND_LOG_RECORD'
+      },
     STORAGE_KEYS: {
       PENDING_QUICK_TRANSLATE: 'pendingQuickTranslate'
     },
@@ -93,6 +94,7 @@ if (typeof window.__WPT_INITIALIZED !== 'undefined') {
 
   function createDefaultProgressStatus() {
     return {
+      runId: '',
       state: 'inactive',
       phase: 'idle',
       priority: 0,
@@ -109,6 +111,9 @@ if (typeof window.__WPT_INITIALIZED !== 'undefined') {
       activeRequests: 0,
       etaMs: 0,
       activeMs: 0,
+      failedBatches: 0,
+      failedSegments: 0,
+      lastError: '',
       provider: '',
       model: '',
       profile: 'fast',
@@ -134,6 +139,23 @@ if (typeof window.__WPT_INITIALIZED !== 'undefined') {
     return geoAuditModulePromise;
   }
 
+  function normalizeTranslationsForSegments(segments, translations) {
+    const expectedCount = Array.isArray(segments) ? segments.length : 0;
+    if (expectedCount === 0) {
+      return [];
+    }
+
+    const normalized = Array.isArray(translations)
+      ? translations.slice(0, expectedCount)
+      : [];
+
+    while (normalized.length < expectedCount) {
+      normalized.push(null);
+    }
+
+    return normalized;
+  }
+
   function maskSensitive(data) {
     if (!data || typeof data !== 'object') {
       return data;
@@ -144,6 +166,28 @@ if (typeof window.__WPT_INITIALIZED !== 'undefined') {
       masked.apiKey = `${String(masked.apiKey).slice(0, 8)}***`;
     }
     return masked;
+  }
+
+  function persistIssueRecord(record) {
+    if (!record || (record.level !== 'WARN' && record.level !== 'ERROR')) {
+      return;
+    }
+
+    try {
+      const action = CONST.ACTIONS && CONST.ACTIONS.APPEND_LOG_RECORD
+        ? CONST.ACTIONS.APPEND_LOG_RECORD
+        : 'APPEND_LOG_RECORD';
+      const request = { action, record };
+      const result = chrome.runtime && chrome.runtime.sendMessage
+        ? chrome.runtime.sendMessage(request)
+        : null;
+
+      if (result && typeof result.catch === 'function') {
+        result.catch(() => {});
+      }
+    } catch (_) {
+      // 오류 저장 실패는 원래 로그 흐름을 막지 않는다.
+    }
   }
 
   function log(level, evt, msg = '', data = {}, err = null) {
@@ -161,6 +205,9 @@ if (typeof window.__WPT_INITIALIZED !== 'undefined') {
 
     if (err) {
       record.err = err instanceof Error ? err.message : String(err);
+      if (err instanceof Error && typeof err.stack === 'string' && err.stack) {
+        record.stack = err.stack;
+      }
       if (typeof err?.status === 'number' && !Number.isNaN(err.status)) {
         record.errStatus = err.status;
       }
@@ -173,11 +220,28 @@ if (typeof window.__WPT_INITIALIZED !== 'undefined') {
     }
 
     const method = level === 'ERROR' ? 'error' : level === 'WARN' ? 'warn' : 'log';
-    console[method](`[WPT][${level}][content] ${evt}`, record);
+    const {
+      ts,
+      level: recordLevel,
+      ns,
+      evt: eventName,
+      msg: message,
+      err: errorMessage,
+      ...extra
+    } = record;
+    void ts;
+    void recordLevel;
+    void ns;
+    void eventName;
+    const dataText = Object.keys(extra).length > 0 ? ` ${JSON.stringify(extra)}` : '';
+    const errorText = errorMessage ? ` | err=${errorMessage}` : '';
+    console[method](`[WPT][${level}][content] ${evt}${msg ? ` ${message}` : ''}${dataText}${errorText}`);
+    persistIssueRecord(record);
   }
 
   const logDebug = (evt, msg, data, err) => log('DEBUG', evt, msg, data, err);
   const logInfo = (evt, msg, data, err) => log('INFO', evt, msg, data, err);
+  const logWarn = (evt, msg, data, err) => log('WARN', evt, msg, data, err);
   const logError = (evt, msg, data, err) => log('ERROR', evt, msg, data, err);
 
   if (!WPT.Progress) {
@@ -241,6 +305,13 @@ if (typeof window.__WPT_INITIALIZED !== 'undefined') {
 
     if (request.action === CONST.ACTIONS.START_PAGE_TRANSLATION || request.action === CONST.ACTIONS.TRANSLATE_FULL_PAGE) {
       const profile = request.profile || (request.useCache === false ? 'precise' : 'fast');
+      logInfo('TRANSLATION_REQUEST_RECEIVED', '페이지 번역 요청 수신', {
+        action: request.action,
+        profile,
+        provider: request.provider,
+        model: request.model,
+        hasApiKey: Boolean(request.apiKey)
+      });
       void handleStartTranslation({
         provider: request.provider,
         apiKey: request.apiKey,
@@ -252,6 +323,13 @@ if (typeof window.__WPT_INITIALIZED !== 'undefined') {
     }
 
     if (request.action === CONST.ACTIONS.START_PRECISE_RETRANSLATION) {
+      logInfo('TRANSLATION_REQUEST_RECEIVED', 'AI 정밀 번역 요청 수신', {
+        action: request.action,
+        profile: 'precise',
+        provider: request.provider,
+        model: request.model,
+        hasApiKey: Boolean(request.apiKey)
+      });
       void handleStartTranslation({
         provider: request.provider,
         apiKey: request.apiKey,
@@ -389,6 +467,7 @@ if (typeof window.__WPT_INITIALIZED !== 'undefined') {
 
   function resetState(config) {
     progressStatus = Object.assign(createDefaultProgressStatus(), {
+      runId: config.runId || '',
       state: 'analyzing',
       phase: 'analyzing',
       provider: config.provider,
@@ -401,10 +480,31 @@ if (typeof window.__WPT_INITIALIZED !== 'undefined') {
     WPT.Progress.pushProgress();
   }
 
+  function markBatchFailure(segments, error, batchMeta = {}) {
+    const failedSegmentCount = sumTargetCount(Array.isArray(segments) ? segments : []);
+    progressStatus.failedBatches += 1;
+    progressStatus.failedSegments += failedSegmentCount;
+    progressStatus.lastError = error instanceof Error ? error.message : String(error || '');
+
+    logError('BATCH_TRANSLATION_FAILED', '배치 번역 실패', {
+      ...batchMeta,
+      count: Array.isArray(segments) ? segments.length : 0,
+      failedSegmentCount
+    }, error);
+  }
+
+  function createRunId() {
+    if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+      return crypto.randomUUID();
+    }
+
+    return `run-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+  }
+
   function createRunToken() {
     return {
       cancelled: false,
-      id: Date.now() + Math.random(),
+      id: createRunId(),
       controller: typeof AbortController === 'function' ? new AbortController() : null
     };
   }
@@ -518,8 +618,12 @@ if (typeof window.__WPT_INITIALIZED !== 'undefined') {
   }
 
   function splitBatchForRetry(segments) {
-    if (!Array.isArray(segments) || segments.length <= 1) {
-      return [segments || []];
+    if (!Array.isArray(segments) || segments.length === 0) {
+      return [];
+    }
+
+    if (segments.length === 1) {
+      return [segments.slice()];
     }
 
     const totalTokens = segments.reduce((sum, segment) => sum + estimateSegmentTokens(segment), 0);
@@ -535,7 +639,14 @@ if (typeof window.__WPT_INITIALIZED !== 'undefined') {
     }
 
     splitIndex = Math.min(Math.max(splitIndex, 1), segments.length - 1);
-    return [segments.slice(0, splitIndex), segments.slice(splitIndex)];
+
+    const leftBatch = segments.slice(0, splitIndex);
+    const rightBatch = segments.slice(splitIndex);
+    if (leftBatch.length === 0 || rightBatch.length === 0) {
+      return [segments.slice()];
+    }
+
+    return [leftBatch, rightBatch];
   }
 
   function getRuntimeProfileConfig(config) {
@@ -575,10 +686,11 @@ if (typeof window.__WPT_INITIALIZED !== 'undefined') {
           role: segment.role
         }))
       });
+      const normalizedTranslations = normalizeTranslationsForSegments(segments, initialTranslations);
 
       return allowMissingRecovery
-        ? await recoverMissingTranslations(segments, initialTranslations, config, runToken, splitDepth)
-        : initialTranslations;
+        ? await recoverMissingTranslations(segments, normalizedTranslations, config, runToken, splitDepth)
+        : normalizedTranslations;
     } catch (error) {
       const isAbortError = Boolean(WPT.Provider && WPT.Provider.isAbortError && WPT.Provider.isAbortError(error));
       if (isAbortError || !isRunCurrent(runToken)) {
@@ -628,7 +740,7 @@ if (typeof window.__WPT_INITIALIZED !== 'undefined') {
       return translations;
     }
 
-    const recoveredTranslations = [...translations];
+    const recoveredTranslations = normalizeTranslationsForSegments(segments, translations);
     const missingIndexes = recoveredTranslations
       .map((translation, index) => (isMissingTranslation(translation) ? index : -1))
       .filter((index) => index >= 0);
@@ -643,11 +755,20 @@ if (typeof window.__WPT_INITIALIZED !== 'undefined') {
       }
 
       const indexGroup = missingIndexes.slice(cursor, cursor + 6);
-      const recoverySegments = indexGroup.map((index) => segments[index]);
+      const recoveryPairs = indexGroup
+        .map((segmentIndex) => ({
+          segmentIndex,
+          segment: segments[segmentIndex]
+        }))
+        .filter((entry) => entry.segmentIndex >= 0 && entry.segmentIndex < segments.length && entry.segment);
+
+      if (recoveryPairs.length === 0) {
+        continue;
+      }
 
       try {
         const retriedTranslations = await requestTranslationsWithFallback(
-          recoverySegments,
+          recoveryPairs.map((entry) => entry.segment),
           config,
           runToken,
           'page-precise-recovery',
@@ -656,8 +777,14 @@ if (typeof window.__WPT_INITIALIZED !== 'undefined') {
         );
 
         retriedTranslations.forEach((translation, index) => {
-          if (!isMissingTranslation(translation)) {
-            recoveredTranslations[indexGroup[index]] = translation;
+          const segmentIndex = recoveryPairs[index]?.segmentIndex;
+          if (
+            typeof segmentIndex === 'number'
+            && segmentIndex >= 0
+            && segmentIndex < recoveredTranslations.length
+            && !isMissingTranslation(translation)
+          ) {
+            recoveredTranslations[segmentIndex] = translation;
           }
         });
       } catch (error) {
@@ -811,11 +938,10 @@ if (typeof window.__WPT_INITIALIZED !== 'undefined') {
             return;
           }
           updateBatchEntry(batchIndex, 'failed');
-          logError('BATCH_TRANSLATION_FAILED', '배치 번역 실패', {
+          markBatchFailure(segments, error, {
             priority,
-            batchIndex,
-            count: segments.length
-          }, error);
+            batchIndex
+          });
         } finally {
           WPT.Progress.onBatchEnd();
           if (isRunCurrent(runToken)) {
@@ -930,13 +1056,26 @@ if (typeof window.__WPT_INITIALIZED !== 'undefined') {
 
   async function handleStartTranslation(partialConfig) {
     if (activeRun && !activeRun.cancelled && progressStatus.state === 'translating') {
+      logInfo('TRANSLATION_REQUEST_SKIPPED', '이미 번역 중이라 새 요청을 건너뜀', {
+        activeRunId: activeRun.id,
+        state: progressStatus.state,
+        phase: progressStatus.phase,
+        requestedProfile: partialConfig?.profile || ''
+      });
       return;
     }
 
     const translationConfig = await resolveTranslationConfig(partialConfig || {});
     const runToken = createRunToken();
     activeRun = runToken;
+    translationConfig.runId = runToken.id;
     translationConfig.signal = runToken.controller ? runToken.controller.signal : undefined;
+    logInfo('TRANSLATION_RUN_CREATED', '번역 실행 컨텍스트 생성', {
+      runId: runToken.id,
+      profile: translationConfig.profile,
+      provider: translationConfig.provider,
+      model: translationConfig.model
+    });
     originalTexts = new WeakMap();
     translatedElements = new Set();
 
@@ -1029,9 +1168,9 @@ if (typeof window.__WPT_INITIALIZED !== 'undefined') {
           if (!isRunCurrent(runToken)) {
             return;
           }
-          progressStatus.phase = 'completed';
-          progressStatus.state = 'completed';
-          await titlePromise.catch(() => {});
+        progressStatus.phase = 'completed';
+        progressStatus.state = progressStatus.failedBatches > 0 ? 'completed_with_errors' : 'completed';
+        await titlePromise.catch(() => {});
           if (!isRunCurrent(runToken)) {
             return;
           }
@@ -1069,7 +1208,7 @@ if (typeof window.__WPT_INITIALIZED !== 'undefined') {
       }
 
       progressStatus.phase = 'completed';
-      progressStatus.state = 'completed';
+      progressStatus.state = progressStatus.failedBatches > 0 ? 'completed_with_errors' : 'completed';
       recalculateEta();
       WPT.Progress.pushProgress();
 
@@ -1092,7 +1231,7 @@ if (typeof window.__WPT_INITIALIZED !== 'undefined') {
         return;
       }
 
-      logInfo('TRANSLATION_COMPLETED', '페이지 번역 완료', {
+      const completionMeta = {
         provider: translationConfig.provider,
         model: translationConfig.model,
         profile: translationConfig.profile,
@@ -1100,8 +1239,15 @@ if (typeof window.__WPT_INITIALIZED !== 'undefined') {
         translatedSegments: progressStatus.translatedSegments,
         cacheHits: progressStatus.cacheHits,
         batches: progressStatus.batchCount,
+        failedBatches: progressStatus.failedBatches,
+        failedSegments: progressStatus.failedSegments,
         activeMs: progressStatus.activeMs
-      });
+      };
+      if (progressStatus.failedBatches > 0) {
+        logWarn('TRANSLATION_COMPLETED_WITH_ERRORS', '페이지 번역이 일부 실패 상태로 완료됨', completionMeta);
+      } else {
+        logInfo('TRANSLATION_COMPLETED', '페이지 번역 완료', completionMeta);
+      }
     } catch (error) {
       const isAbortError = Boolean(WPT.Provider && WPT.Provider.isAbortError && WPT.Provider.isAbortError(error));
       if (!isRunCurrent(runToken) || isAbortError) {

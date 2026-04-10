@@ -31,6 +31,7 @@ export const ACTIONS = {
   GET_TRANSLATED_TITLE: 'getTranslatedTitle',
   GET_CACHE_STATUS: 'getCacheStatus',
   CLEAR_CACHE_FOR_DOMAIN: 'clearCacheForDomain',
+  APPEND_LOG_RECORD: 'APPEND_LOG_RECORD',
   AUDIT_GEO: 'auditGeo'
 };
 

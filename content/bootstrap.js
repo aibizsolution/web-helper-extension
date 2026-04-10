@@ -30,7 +30,8 @@
           GET_TRANSLATION_STATE: 'getTranslationState',
           GET_TRANSLATED_TITLE: 'getTranslatedTitle',
           GET_CACHE_STATUS: 'getCacheStatus',
-          CLEAR_CACHE_FOR_DOMAIN: 'clearCacheForDomain'
+          CLEAR_CACHE_FOR_DOMAIN: 'clearCacheForDomain',
+          APPEND_LOG_RECORD: 'APPEND_LOG_RECORD'
         },
         STORAGE_KEYS: {
           PENDING_QUICK_TRANSLATE: 'pendingQuickTranslate'

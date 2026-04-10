@@ -476,15 +476,17 @@ function formatHistoryMode(mode) {
  */
 export async function handleTranslationCompletedForHistory(tabId, data) {
   try {
-    const signature = `${tabId}-${data.totalTexts}-${data.translatedCount}-${data.activeMs}`;
+    const completionRunId = typeof data?.runId === 'string' && data.runId.trim()
+      ? data.runId.trim()
+      : `legacy-${tabId}-${data.totalTexts}-${data.translatedCount}-${data.activeMs}`;
     const now = Date.now();
 
     const lastCompletionMeta = getLastHistoryCompletionMeta();
-    if (lastCompletionMeta.signature === signature && now - lastCompletionMeta.ts < 2000) {
+    if (lastCompletionMeta.runId === completionRunId && now - lastCompletionMeta.ts < 2000) {
       return;
     }
 
-    setLastHistoryCompletionMeta({ signature, ts: now });
+    setLastHistoryCompletionMeta({ runId: completionRunId, ts: now });
 
     const tab = await chrome.tabs.get(tabId);
     if (!tab || !tab.url) {

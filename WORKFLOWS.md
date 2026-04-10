@@ -13,6 +13,7 @@
 
 검증:
 - 기본: `npm run check`
+- lint만 빠르게 확인할 때: `npm run lint`
 - 브라우저 실기동 검증은 사용자가 명시적으로 요청한 경우에만 수행
 - provider 연동 변경이 섞이면: `.env.providers.local`이 있을 때만 `npm run test:providers`
 
@@ -32,6 +33,7 @@
 
 검증:
 - 기본: `npm run check`
+- lint만 빠르게 확인할 때: `npm run lint`
 - 실기동 증상은 사용자가 브라우저 검증을 요청했을 때만 확인
 - provider/API 증상이면: `.env.providers.local`이 있을 때만 `npm run test:providers`
 

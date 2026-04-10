@@ -24,6 +24,7 @@ let currentLogLevel = 'INFO';
 const FAST_TRANSLATE_TARGET_LANGUAGE = 'ko';
 const SIDE_PANEL_COMMAND_ID = 'open-side-panel';
 const openSidePanelWindows = new Set();
+const SHARED_LOG_LIMIT = 500;
 
 const selectionActionByMenuId = new Map(
   SELECTION_ACTIONS
@@ -67,6 +68,28 @@ function log(level, evt, msg = '', data = {}, err = null) {
 const logDebug = (evt, msg, data, err) => log('DEBUG', evt, msg, data, err);
 const logInfo = (evt, msg, data, err) => log('INFO', evt, msg, data, err);
 const logError = (evt, msg, data, err) => log('ERROR', evt, msg, data, err);
+
+async function appendSharedLogRecord(record, sender) {
+  if (!record || typeof record !== 'object') {
+    return false;
+  }
+
+  const normalized = {
+    ...record,
+    ts: typeof record.ts === 'string' && record.ts ? record.ts : new Date().toISOString(),
+    ns: typeof record.ns === 'string' && record.ns ? record.ns : 'content'
+  };
+
+  if (!normalized.pageUrl && typeof sender?.tab?.url === 'string' && sender.tab.url) {
+    normalized.pageUrl = sender.tab.url;
+  }
+
+  const result = await chrome.storage.session.get(['wptLogs']);
+  const existing = Array.isArray(result.wptLogs) ? result.wptLogs : [];
+  const next = [...existing, JSON.stringify(normalized)].slice(-SHARED_LOG_LIMIT);
+  await chrome.storage.session.set({ wptLogs: next });
+  return true;
+}
 
 chrome.runtime.onInstalled.addListener(async () => {
   await initializeExtension();
@@ -324,6 +347,19 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     translateIndexedTextFast(request.text || '', request.targetLanguage || FAST_TRANSLATE_TARGET_LANGUAGE)
       .then((translatedText) => sendResponse({ success: true, translatedText }))
       .catch((error) => sendResponse({ success: false, error: error.message }));
+    return true;
+  }
+
+  if (request.action === ACTIONS.APPEND_LOG_RECORD) {
+    appendSharedLogRecord(request.record, sender)
+      .then(() => sendResponse({ success: true }))
+      .catch((error) => {
+        logDebug('SHARED_LOG_APPEND_FAILED', '공용 로그 저장 실패', {
+          ns: request.record?.ns || 'unknown',
+          evt: request.record?.evt || 'unknown'
+        }, error);
+        sendResponse({ success: false, error: error.message });
+      });
     return true;
   }
 
