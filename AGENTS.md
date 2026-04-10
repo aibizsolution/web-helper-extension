@@ -7,6 +7,18 @@
 - 목적: 웹페이지 번역, 텍스트 번역, 검색 보조, 페이지 진단, 브라우저 도구, 반복 체크리스트를 한 패널에서 제공하는 내부용 확장 프로그램
 - 디자인 가이드: `DESIGN-GUIDE.md`
 
+## 먼저 읽을 문서
+- `README.md`
+  - 개발 시작 순서와 기본 명령
+- `REPO_MAP.md`
+  - 실제 진입점과 주요 디렉터리 역할
+- `WORKFLOWS.md`
+  - 반복 작업 절차와 산출물 기준
+- `VALIDATION.md`
+  - 변경 유형별 검증 게이트
+- `memory.md`
+  - 반복되는 환경 이슈와 운영 메모
+
 ## 현재 사용자 기능
 - `번역`
   - `사이트`: API Key 없이 빠르게 읽는 구글 번역과 AI 정밀 번역 제공
@@ -33,141 +45,49 @@
   - 선택 번역 엔진
   - 사이드패널 단축키 안내
 
-## 현재 번역 엔진 구조
-
-### 페이지 번역
-- `구글 번역`
-  - provider: `builtin-fast`
-  - model: `google-web-mt`
-  - API Key 불필요
-- `AI 정밀 번역`
-  - 현재 패널에서 선택한 provider/model 사용
-  - 현재 사용자 노출 provider: `OpenRouter`, `OpenAI`, `Gemini`
-
-### 선택 텍스트 번역
-- 드래그 액션바와 우클릭 메뉴 모두 `번역 / 복사 / 설명하기 / 검색` 기능 축으로 맞춘다
-- 설정의 `선택 번역 엔진`에 따라 동작
-- 기본값: `구글 번역`
-- 옵션: `현재 AI 설정`
-
-### 캐시 원칙
-- 문자열 캐시와 페이지 스냅샷 캐시는 `provider + model + profile + pipelineVersion` 기준으로 분리
-- `구글 번역`은 캐시를 읽음
-- `AI 정밀 번역`은 캐시를 읽지 않고 새 번역을 생성
-
-## 디렉터리 구조
-```text
-chrome_ext_yt_ai/
-├── manifest.json
-├── background.js
-├── content.js
-├── content/
-│   ├── bootstrap.js
-│   ├── api.js
-│   ├── provider.js
-│   ├── cache.js
-│   ├── industry.js
-│   ├── dom.js
-│   ├── title.js
-│   ├── progress.js
-│   └── selection.js
-├── sidepanel.html
-├── sidepanel.js
-├── sidepanel/
-│   └── bootstrap.js
-├── styles/
-│   ├── tokens.css
-│   ├── layout.css
-│   ├── components.css
-│   ├── feature-panels.css
-│   └── sidepanel.css
-├── modules/
-│   ├── constants.js
-│   ├── panel-constants.js
-│   ├── panel-dom.js
-│   ├── state.js
-│   ├── tab-registry.js
-│   ├── panel-tab-modules.js
-│   ├── ui-utils.js
-│   ├── translation.js
-│   ├── history.js
-│   ├── quick-translate.js
-│   ├── search.js
-│   ├── geo-tab.js
-│   ├── geo-audit.js
-│   ├── geo-ui.js
-│   ├── tools.js
-│   ├── error-center.js
-│   ├── recurring.js
-│   ├── settings.js
-│   ├── provider-catalog.js
-│   ├── provider-client.js
-│   ├── storage.js
-│   └── flags.js
-├── logger.js
-├── meta.js
-├── README.md
-├── CHANGELOG.md
-├── AGENTS.md
-├── scripts/
-│   └── test-provider-models.mjs
-└── icons/
-```
-
 ## 핵심 아키텍처
+- `background.js`
+  - content script 등록, 선택 텍스트 우클릭 메뉴, 사이드패널 토글, 구글 번역 브리지를 담당한다.
+- `content.js` + `content/*`
+  - 페이지 번역 오케스트레이션, DOM 반영, 선택 텍스트 UX, 캐시를 담당한다.
+- `sidepanel.html` + `sidepanel.js` + `modules/*`
+  - 패널 초기화, 탭 레지스트리, 번역/검색/페이지 진단/도구/반복관리/설정/오류 센터 기능 모듈을 담당한다.
+- `styles/*`
+  - `tokens`, `layout`, `components`, `feature-panels`, `sidepanel` 레이어로 UI 스타일을 나눈다.
 
-### background.js
-- content script 등록
-- 선택 텍스트 우클릭 메뉴
-- 사이드패널 열기/닫기 토글
-- 구글 번역 브리지
-- 공용 `CONTENT_SCRIPT_FILES`, 세션 키 상수 재사용
-
-### content.js + content/*
-- 실제 페이지 번역 오케스트레이션
-- 텍스트 수집, 배치 분할, DOM 반영, 원본 복원
-- 선택 텍스트 번역 UI
-- 캐시 읽기/쓰기
-
-### sidepanel.js + modules/*
-- 탭 레지스트리 초기화와 브라우저 탭 컨텍스트 동기화
-- 번역 엔진 선택, 진행 상태, 기록, 설정 관리
-- 검색/페이지 진단/도구/반복관리 각 기능 모듈화
-
-### styles/*
-- `tokens.css`: 색상, 간격, radius 같은 기본 토큰
-- `layout.css`: 패널 레이아웃과 탭 컨테이너
-- `components.css`: 공용 탭, 카드, 버튼, 폼 컴포넌트
-- `feature-panels.css`: 기능 탭 전용 스타일
+## 개발 기준
+- Node 기준 버전은 `22` LTS다.
+- 기본 검증은 `npm run check`다.
+- provider smoke test는 `.env.providers.local`이 준비된 경우에만 `npm run test:providers`를 사용한다.
+- 자세한 절차는 `WORKFLOWS.md`, 검증 게이트는 `VALIDATION.md`를 기준으로 삼는다.
 
 ## 중요 운영 원칙
-- 사이드패널은 `window-level`, 번역 상태는 `tab-level`로 관리
-- 확장 업데이트 직후 열린 탭에는 구버전 content script가 남을 수 있어 새로고침이 필요할 수 있음
-- 브라우저 테스트는 사용자가 명시적으로 요청할 때만 진행
-- `Playwright MCP` 브라우저는 `chrome://`, `chrome-extension://`, `file://` 접근이 막혀 있어 확장 자체의 실제 UI/사이드패널 테스트 용도로 바로 쓰지 않는다
-- 확장 실기동 검증이 필요하면 `Playwright MCP`로 먼저 제한 여부만 확인하고, 실제 테스트는 로컬 `playwright` 스크립트에서 `chromium.launchPersistentContext + --disable-extensions-except + --load-extension` 조합으로 unpacked 확장을 로드해 진행한다
-- 릴리스 전 `manifest.json` 버전과 `meta.js` 날짜를 함께 확인
-- 큰 구조 변경이 있으면 `README.md`와 `AGENTS.md`를 같이 갱신
-- UI 기준은 `모바일 대응`이 아니라 `데스크톱 Chrome 사이드패널 폭`
-- 새 PC 온보딩은 기본적으로 `clone -> npm install -> 압축해제된 확장 프로그램 로드 -> npm run check` 흐름으로 안내
-- 개발 검증 스크립트는 `package.json` 기준으로 유지하고, 새 검증 흐름이 생기면 스크립트와 README를 같이 갱신
+- 사이드패널은 `window-level`, 번역 상태는 `tab-level`로 관리한다.
+- 브라우저 테스트는 사용자가 명시적으로 요청할 때만 진행한다.
+- `Playwright MCP` 브라우저는 `chrome://`, `chrome-extension://`, `file://` 접근이 막혀 있어 확장 자체의 실기동 UI 검증에는 쓰지 않는다.
+- 확장 업데이트 직후 열린 탭에는 구버전 content script가 남을 수 있어 새로고침이 필요할 수 있다.
+- UI 기준은 `모바일 대응`이 아니라 `데스크톱 Chrome 사이드패널 폭`이다.
+- 반복되는 환경 이슈, 자주 틀리는 명령, 중요한 운영 결정만 `memory.md`에 남긴다.
 
 ## 업데이트 관리 규칙
 - 사용자에게 보이는 UI, 기능, 문구가 바뀌면 같은 작업 안에서 `meta.js`의 `LAST_EDITED`를 당일 날짜로 반드시 갱신한다.
 - 사용자 흐름, 설치 방법, 협업 방식이 바뀌면 `README.md`를 같이 갱신한다.
-- 구조, 운영 원칙, 에이전트 작업 방식이 바뀌면 `AGENTS.md`를 같이 갱신한다.
-- 사용자 영향이 있는 변경은 `CHANGELOG.md`에 날짜 기준으로 반드시 남긴다.
-- `manifest.json` 버전은 임의로 올리지 말고, 사용자가 릴리스/버전업을 요청했을 때만 갱신한다.
-- 개발 환경 의존성이 생기거나 바뀌면 `package.json`과 필요한 스크립트를 같은 작업 안에서 반드시 갱신한다.
-- 작업을 마무리하기 전에 `meta.js`, `README.md`, `AGENTS.md`, `CHANGELOG.md` 중 무엇을 업데이트해야 하는지 항상 먼저 점검한다.
+- 구조, 운영 원칙, 에이전트 작업 방식이 바뀌면 `AGENTS.md`와 관련 운영 문서를 같이 갱신한다.
+- 저장소 진입점이나 구조가 바뀌면 `REPO_MAP.md`를 같이 갱신한다.
+- 반복 절차가 바뀌면 `WORKFLOWS.md`를 같이 갱신한다.
+- 검증 기준이 바뀌면 `VALIDATION.md`를 같이 갱신한다.
+- 사용자 영향이 있는 변경은 `CHANGELOG.md`에 날짜 기준으로 남긴다.
+- `manifest.json` 버전은 사용자가 릴리스/버전업을 요청했을 때만 갱신한다.
+- 개발 환경 의존성이 생기거나 바뀌면 `package.json`과 필요한 스크립트를 같은 작업 안에서 갱신한다.
+- 작업을 마무리하기 전에 `meta.js`, `README.md`, `AGENTS.md`, `REPO_MAP.md`, `WORKFLOWS.md`, `VALIDATION.md`, `memory.md`, `CHANGELOG.md` 반영 여부를 점검한다.
 
 ## UI/디자인 원칙
-- 새 UI를 만들기 전에 `sidepanel.html`의 기존 패턴과 `DESIGN-GUIDE.md`를 먼저 확인
-- 서브탭은 기존 `translate-subtabs` / `translate-subtab` 패턴 재사용
-- 항목은 그룹형으로 묶고, 카드 안에 카드 안에 카드를 넣는 중첩 섹션 지양
-- 같은 역할의 컴포넌트는 탭이 달라도 같은 스타일 유지
-- 설명 문구는 반복해서 본문에 늘어놓지 말고, 기본적으로 툴팁 우선
-- 공용 컴포넌트 클래스는 `vertical-tabbar`, `translate-subtabs`, `translate-subtab`, `translation-tooltip-icon`, `card`, `action-row`, `inline-select`, `chip` 재사용 우선
+- 새 UI를 만들기 전에 `sidepanel.html`의 기존 패턴과 `DESIGN-GUIDE.md`를 먼저 확인한다.
+- 서브탭은 기존 `translate-subtabs` / `translate-subtab` 패턴을 재사용한다.
+- 항목은 그룹형으로 묶고, 카드 안에 카드 안에 카드를 넣는 중첩 섹션은 지양한다.
+- 같은 역할의 컴포넌트는 탭이 달라도 같은 스타일을 유지한다.
+- 설명 문구는 본문에 반복해서 늘어놓지 말고 기본적으로 툴팁을 우선한다.
+- 공용 컴포넌트 클래스는 `vertical-tabbar`, `translate-subtabs`, `translate-subtab`, `translation-tooltip-icon`, `card`, `action-row`, `inline-select`, `chip` 재사용을 우선한다.
 
 ## 자주 보는 파일
 - 패널 UI: `sidepanel.html`
@@ -182,15 +102,6 @@ chrome_ext_yt_ai/
 - 메타/푸터: `meta.js`
 - 변경 기록: `CHANGELOG.md`
 
-## 배포 전 체크리스트
-1. `manifest.json` 버전 확인
-2. `meta.js`의 `LAST_EDITED` 확인
-3. `README.md`, `AGENTS.md`, `CHANGELOG.md` 반영 여부 확인
-4. 바뀐 JS 파일 `node --check`
-5. API 키가 준비돼 있으면 `node scripts/test-provider-models.mjs`
-6. unpacked 확장 기준이면 브라우저에서 `다시 로드` 후 열린 탭 새로고침
-7. 커밋 후 원격 저장소에 push
-
 ## 참고 메모
-- 사용자 노출 이름은 `페이지 진단`이지만 내부 모듈명은 `geo-*`를 유지 중
-- provider smoke test 설정은 `.env.providers.local`에만 두고 커밋하지 않음
+- 사용자 노출 이름은 `페이지 진단`이지만 내부 모듈명은 `geo-*`를 유지 중이다.
+- provider smoke test 설정은 `.env.providers.local`에만 두고 커밋하지 않는다.
