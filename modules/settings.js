@@ -121,6 +121,10 @@ function handleSettingsFieldChanged(event) {
     scheduleOpenRouterKeyStatusRefresh();
   }
 
+  if (inputId === 'selectionTranslateEnabled') {
+    syncSelectionActionbarSettingState();
+  }
+
   setSettingsChanged(true);
   showSaveBar();
 }
@@ -140,8 +144,10 @@ export async function loadSettings() {
     setInputValue('geminiApiKey', formSettings.geminiApiKey);
     setCheckboxValue('autoTranslate', formSettings.autoTranslate);
     setCheckboxValue('selectionTranslateEnabled', formSettings.selectionTranslateEnabled);
+    setCheckboxValue('selectionPopoverCloseOnBackdrop', formSettings.selectionPopoverCloseOnBackdrop);
     setInputValue('selectionTranslateMode', formSettings.selectionTranslateMode);
     setCheckboxValue('debugLog', formSettings.debugLog);
+    syncSelectionActionbarSettingState();
     syncAllProviderApiDeleteButtons();
     await updateApiKeyUI();
     await refreshOpenRouterKeyStatus();
@@ -172,6 +178,35 @@ function setCheckboxValue(id, value) {
   if (input) {
     input.checked = Boolean(value);
   }
+}
+
+function setFieldDisabled(id, disabled) {
+  const field = document.getElementById(id);
+  if (!field) {
+    return;
+  }
+
+  const nextDisabled = Boolean(disabled);
+  field.disabled = nextDisabled;
+  field.setAttribute('aria-disabled', nextDisabled ? 'true' : 'false');
+
+  const card = field.closest('.settings-control-card');
+  if (card) {
+    card.classList.toggle('is-disabled', nextDisabled);
+    card.setAttribute('aria-disabled', nextDisabled ? 'true' : 'false');
+  }
+
+  const selectWrap = field.closest('.settings-select-wrap');
+  if (selectWrap) {
+    selectWrap.classList.toggle('is-disabled', nextDisabled);
+  }
+}
+
+function syncSelectionActionbarSettingState() {
+  const actionBarEnabled = isChecked('selectionTranslateEnabled');
+  const dependentDisabled = !actionBarEnabled;
+  setFieldDisabled('selectionPopoverCloseOnBackdrop', dependentDisabled);
+  setFieldDisabled('selectionTranslateMode', dependentDisabled);
 }
 
 function getOpenRouterKeyStatusElements() {
@@ -346,6 +381,7 @@ export async function handleSaveSettings() {
       geminiApiKey: getInputValue('geminiApiKey'),
       autoTranslate: isChecked('autoTranslate'),
       selectionTranslateEnabled: isChecked('selectionTranslateEnabled'),
+      selectionPopoverCloseOnBackdrop: isChecked('selectionPopoverCloseOnBackdrop'),
       selectionTranslateMode: getInputValue('selectionTranslateMode') || 'fast'
     };
 

@@ -1,6 +1,6 @@
 {
   "name": "web-helper-extension",
-  "version": "2.4.0",
+  "version": "2.4.1",
   "private": true,
   "description": "웹 도우미 Chrome extension development tooling",
   "type": "module",
@@ -8,6 +8,7 @@
     "check": "npm run check:js && npm run lint",
     "check:js": "node scripts/check-js.mjs",
     "lint": "eslint .",
+    "release:pack": "npm run check && node scripts/release-pack.mjs",
     "test:providers": "node scripts/test-provider-models.mjs"
   },
   "devDependencies": {

@@ -34,6 +34,7 @@
   - 패널 부트스트랩 보조 파일을 둡니다.
 - `scripts/`
   - `check-js.mjs`: 기본 JS 문법 검증
+  - `release-pack.mjs`: 릴리즈용 폴더와 zip 생성, 버전/`LAST_EDITED` 검증
   - `test-provider-models.mjs`: provider smoke test
 - `icons/`
   - 확장 아이콘 에셋입니다.
@@ -47,6 +48,7 @@
 
 ## 기본 검증 시작점
 - `npm run check`
+- `npm run release:pack`
 - `npm run test:providers`
 
 검증 규칙의 기준 문서는 `VALIDATION.md`입니다. 구조가 바뀌면 여기와 `AGENTS.md`를 같이 갱신합니다.

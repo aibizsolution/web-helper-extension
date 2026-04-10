@@ -286,6 +286,13 @@
       box-shadow: 0 0 0 3px rgba(42, 108, 240, 0.16);
     }
 
+    .translation-engine-select:disabled {
+      color: var(--text-disabled);
+      background: rgba(255, 255, 255, 0.02);
+      border-color: rgba(255, 255, 255, 0.08);
+      cursor: not-allowed;
+    }
+
     .translation-engine-select option {
       background: #12161e;
       color: var(--text-primary);
@@ -1091,6 +1098,18 @@
       border-top: none;
     }
 
+    .settings-control-card.is-disabled {
+      opacity: 0.68;
+    }
+
+    .settings-control-card.is-disabled .settings-control-label {
+      color: var(--text-disabled);
+    }
+
+    .settings-control-card.is-disabled .toggle-switch {
+      cursor: not-allowed;
+    }
+
     .settings-control-row {
       display: grid;
       grid-template-columns: minmax(0, 1fr) auto;
@@ -1120,6 +1139,10 @@
 
     .settings-select-wrap {
       width: 100%;
+    }
+
+    .settings-select-wrap.is-disabled::after {
+      opacity: 0.4;
     }
 
     .settings-compact-select {
@@ -1233,6 +1256,11 @@
 
     .toggle-switch input:checked + .toggle-slider::before {
       transform: translateX(20px);
+    }
+
+    .toggle-switch input:disabled + .toggle-slider {
+      cursor: not-allowed;
+      opacity: 0.85;
     }
 
     .inline-setting {

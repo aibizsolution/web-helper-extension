@@ -48,14 +48,17 @@
 절차:
 1. `manifest.json` 버전과 `meta.js` 날짜를 함께 확인합니다.
 2. `README.md`, `AGENTS.md`, `CHANGELOG.md` 반영 여부를 확인합니다.
-3. unpacked 확장을 다시 로드하고 열린 탭을 새로고침해야 하는지 점검합니다.
+3. `README.md`의 `현재 버전 / 마지막 정리`가 실제 릴리즈 기준과 맞는지 확인합니다.
+4. `npm run release:pack`로 배포용 `release/` 폴더와 zip을 생성합니다.
+5. unpacked 확장을 다시 로드하고 열린 탭을 새로고침해야 하는지 점검합니다.
 
 검증:
-- 필수: `npm run check`
+- 필수: `npm run release:pack`
 - 선택: `.env.providers.local`이 있을 때만 `npm run test:providers`
 
 산출물:
 - 릴리스 가능한 작업 트리
+- `release/web-helper-extension-vX.Y.Z.zip`
 - 릴리스 노트 또는 변경 기록
 
 ## 4. 문서 또는 운영 하네스 변경

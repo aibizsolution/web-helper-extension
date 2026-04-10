@@ -3,7 +3,7 @@
 웹페이지 번역, 텍스트 번역, 검색 보조, 페이지 진단, 브라우저 도구, 반복 체크리스트를 한 사이드패널에서 처리하는 Chrome 확장 프로그램입니다.
 
 ## 현재 버전
-- 버전: `2.4.0`
+- 버전: `2.4.1`
 - 마지막 정리: `2026-04-10`
 
 ## 개발 문서
@@ -84,3 +84,11 @@ AI 정밀 번역은 설정에서 provider API Key를 입력해야 사용할 수 
 - `README.md`, `AGENTS.md`, `CHANGELOG.md` 반영 여부 확인
 - `npm run check`
 - 필요 시 `npm run test:providers`
+
+## 배포 패키지 만들기
+1. 릴리즈 직전에 `manifest.json`, `package.json`, `CHANGELOG.md`, `meta.js`를 점검합니다.
+2. `meta.js`의 `LAST_EDITED`와 README의 `현재 버전 / 마지막 정리`는 릴리즈 당일 기준으로 최신이어야 합니다. `release:pack`가 다르면 실패합니다.
+3. `npm run release:pack`를 실행합니다.
+4. 생성된 `release/web-helper-extension-vX.Y.Z.zip`을 GitHub Releases 자산으로 업로드합니다.
+
+`release/`에는 배포용 폴더와 zip만 만들고, 개발 소스 저장소에는 커밋하지 않습니다.

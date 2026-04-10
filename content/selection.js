@@ -36,6 +36,7 @@
     const RELEVANT_STORAGE_KEYS = new Set([
       'selectionTranslateEnabled',
       'selectionTranslateMode',
+      'selectionPopoverCloseOnBackdrop',
       'defaultProvider',
       'defaultModel',
       'translationProfile',
@@ -67,7 +68,8 @@
         hasApiKey: false,
         model: 'google/gemini-3.1-flash-lite-preview',
         selectionTranslateEnabled: true,
-        selectionTranslateMode: 'fast'
+        selectionTranslateMode: 'fast',
+        selectionPopoverCloseOnBackdrop: false
       };
     }
 
@@ -442,6 +444,10 @@
       }
     }
 
+    function isPopoverOpen() {
+      return Boolean(popoverEl && popoverEl.style.display !== 'none');
+    }
+
     function showPopoverFeedback(message, isError) {
       if (!popoverEl) {
         return;
@@ -697,8 +703,13 @@
       const hasResult = Boolean(!isLoading && !errorMessage && resultText);
       const resultButtonStyle = [
         'flex:1',
+        'display:inline-flex',
+        'align-items:center',
+        'justify-content:center',
         'border-radius:10px',
         'padding:9px 10px',
+        'line-height:1.2',
+        'font-weight:700',
         hasResult ? 'border:1px solid rgba(255,255,255,0.12)' : 'border:1px solid rgba(255,255,255,0.08)',
         hasResult ? 'background:rgba(255,255,255,0.04)' : 'background:rgba(255,255,255,0.02)',
         hasResult ? 'color:#EDEEF0' : 'color:#667085',
@@ -716,7 +727,7 @@
           ${escapeHtml(isLoading ? getPopoverLoadingText(mode) : (errorMessage || resultText || ''))}
         </div>
         <div style="display:flex; gap:8px; margin-top:12px;">
-          <button type="button" data-role="copy-source" style="flex:1; border:none; border-radius:10px; padding:9px 10px; background:#2A6CF0; color:white; cursor:pointer;">원문 복사</button>
+          <button type="button" data-role="copy-source" style="flex:1; display:inline-flex; align-items:center; justify-content:center; border:none; border-radius:10px; padding:9px 10px; line-height:1.2; font-weight:700; background:#2A6CF0; color:white; cursor:pointer;">원문 복사</button>
           <button type="button" data-role="copy-result" ${hasResult ? '' : 'disabled'} style="${resultButtonStyle}">${escapeHtml(getResultCopyLabel(mode))}</button>
         </div>
         <div data-role="copy-feedback" style="min-height:18px; margin-top:8px; font-size:12px; opacity:0; transition:opacity 0.16s ease;"></div>
@@ -1044,6 +1055,9 @@
       }
       if (popoverEl && popoverEl.contains(target)) {
         return;
+      }
+      if (activeConfig.selectionPopoverCloseOnBackdrop === true && isPopoverOpen()) {
+        hidePopover();
       }
       if (!(target instanceof Node) || !window.getSelection || !window.getSelection()?.toString()) {
         hideChip();

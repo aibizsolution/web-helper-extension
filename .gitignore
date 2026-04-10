@@ -34,6 +34,7 @@ env/
 # Temporary files
 *.tmp
 *.temp
+release/
 
 # Backup files
 *.bak

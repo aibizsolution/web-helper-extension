@@ -72,6 +72,7 @@
         'translationProfile',
         'selectionTranslateEnabled',
         'selectionTranslateMode',
+        'selectionPopoverCloseOnBackdrop',
         'translationPipelineVersion',
         'autoTranslate'
       ]);
@@ -102,6 +103,9 @@
       if (!raw.selectionTranslateMode) {
         updates.selectionTranslateMode = 'fast';
       }
+      if (raw.selectionPopoverCloseOnBackdrop === undefined) {
+        updates.selectionPopoverCloseOnBackdrop = false;
+      }
       if (!raw.translationPipelineVersion) {
         updates.translationPipelineVersion = PIPELINE_VERSION;
       }
@@ -131,6 +135,7 @@
         profile: settings.translationProfile === 'precise' ? 'precise' : DEFAULT_PROFILE,
         selectionTranslateEnabled: settings.selectionTranslateEnabled !== false,
         selectionTranslateMode: settings.selectionTranslateMode === 'provider' ? 'provider' : 'fast',
+        selectionPopoverCloseOnBackdrop: settings.selectionPopoverCloseOnBackdrop === true,
         autoTranslate: settings.autoTranslate === true,
         translationPipelineVersion: settings.translationPipelineVersion || PIPELINE_VERSION
       };

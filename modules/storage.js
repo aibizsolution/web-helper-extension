@@ -28,6 +28,7 @@ const SETTING_KEYS = [
   'translationProfile',
   'selectionTranslateEnabled',
   'selectionTranslateMode',
+  'selectionPopoverCloseOnBackdrop',
   'translationPipelineVersion',
   'autoTranslate',
   'debugLog',
@@ -73,6 +74,7 @@ function normalizeSettings(raw) {
     translationProfile: profile,
     selectionTranslateEnabled: raw.selectionTranslateEnabled !== false,
     selectionTranslateMode: resolveSelectionTranslateMode(raw.selectionTranslateMode),
+    selectionPopoverCloseOnBackdrop: raw.selectionPopoverCloseOnBackdrop === true,
     translationPipelineVersion: raw.translationPipelineVersion || TRANSLATION_PIPELINE_VERSION,
     autoTranslate: raw.autoTranslate === true,
     debugLog: !!raw.debugLog,
@@ -122,6 +124,10 @@ export async function migrateLegacySettings() {
 
     if (!raw.selectionTranslateMode) {
       updates.selectionTranslateMode = 'fast';
+    }
+
+    if (raw.selectionPopoverCloseOnBackdrop === undefined) {
+      updates.selectionPopoverCloseOnBackdrop = false;
     }
 
     if (!raw.translationPipelineVersion) {
@@ -182,6 +188,7 @@ export async function getActiveTranslationConfig() {
     hasApiKey: Boolean(apiKey && apiKey.trim()),
     selectionTranslateEnabled: settings.selectionTranslateEnabled !== false,
     selectionTranslateMode: resolveSelectionTranslateMode(settings.selectionTranslateMode),
+    selectionPopoverCloseOnBackdrop: settings.selectionPopoverCloseOnBackdrop === true,
     autoTranslate: settings.autoTranslate === true,
     debugLog: !!settings.debugLog
   };
