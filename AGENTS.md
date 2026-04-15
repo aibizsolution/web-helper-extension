@@ -2,7 +2,7 @@
 
 ## 프로젝트 개요
 - 제품명: `웹 도우미`
-- 현재 버전 기준: `2.4.0`
+- 현재 버전 기준: `2.4.2`
 - 스택: Chrome Extension Manifest V3 + Vanilla JS + Side Panel
 - 목적: 웹페이지 번역, 텍스트 번역, 검색 보조, 페이지 진단, 브라우저 도구, 반복 체크리스트를 한 패널에서 제공하는 내부용 확장 프로그램
 - 디자인 가이드: `DESIGN-GUIDE.md`
@@ -79,7 +79,8 @@
 - 반복 절차가 바뀌면 `WORKFLOWS.md`를 같이 갱신한다.
 - 검증 기준이 바뀌면 `VALIDATION.md`를 같이 갱신한다.
 - 사용자 영향이 있는 변경은 `CHANGELOG.md`에 날짜 기준으로 남긴다.
-- `manifest.json` 버전은 사용자가 릴리스/버전업을 요청했을 때만 갱신한다.
+- 릴리스 파일 생성, 배포 패키지 생성, 버전업 요청은 모두 버전 갱신 요청으로 본다.
+- 릴리스 요청에 별도 버전 번호가 없으면 기본적으로 패치 버전을 올리고, `manifest.json`, `package.json`, `README.md`, `CHANGELOG.md`가 같은 버전을 가리키게 한다.
 - 개발 환경 의존성이 생기거나 바뀌면 `package.json`과 필요한 스크립트를 같은 작업 안에서 갱신한다.
 - 작업을 마무리하기 전에 `meta.js`, `README.md`, `AGENTS.md`, `REPO_MAP.md`, `WORKFLOWS.md`, `VALIDATION.md`, `memory.md`, `CHANGELOG.md` 반영 여부를 점검한다.
 

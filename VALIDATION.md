@@ -16,7 +16,7 @@
 | UI / HTML / CSS 변경 | `npm run check` | 사용자가 브라우저 검증을 명시적으로 요청한 경우에만 별도 실기동 확인 |
 | `manifest.json`, `background.js`, `content.js`, `content/*` 경계 변경 | `npm run check` | 사용자가 브라우저 검증을 명시적으로 요청한 경우에만 별도 실기동 확인 |
 | provider 연동 변경 | `npm run check` | `.env.providers.local`이 있을 때만 `npm run test:providers` |
-| 릴리스 준비 | `npm run release:pack` | `manifest.json`과 `package.json` 버전 일치, `meta.js`와 `README.md` 날짜/버전이 당일 기준 최신인지 함께 확인 |
+| 릴리스 준비 | `npm run release:pack` | 릴리스 요청 시 버전을 올렸는지, `manifest.json`/`package.json`/`README.md`/`CHANGELOG.md` 버전이 일치하는지, `meta.js`와 `README.md` 날짜가 당일 기준 최신인지 함께 확인 |
 
 ## 명령 설명
 - `npm run check`
@@ -27,7 +27,7 @@
   - `.env.providers.local`에 키가 있는 provider만 실제 API smoke test를 수행합니다.
 - `npm run release:pack`
   - `npm run check` 후 배포용 `release/` 폴더와 zip을 생성합니다.
-  - `manifest.json`과 `package.json` 버전이 다르거나 `meta.js`의 `LAST_EDITED`, `README.md`의 `현재 버전 / 마지막 정리`가 서울 기준 릴리즈 상태와 맞지 않으면 실패합니다.
+  - `manifest.json`, `package.json`, `README.md`, `CHANGELOG.md` 버전이 다르거나 `meta.js`의 `LAST_EDITED`, `README.md`의 `현재 버전 / 마지막 정리`가 서울 기준 릴리즈 상태와 맞지 않으면 실패합니다.
 
 ## 실패 처리 원칙
 - 같은 환경 오류를 같은 방식으로 반복 재시도하지 않습니다.

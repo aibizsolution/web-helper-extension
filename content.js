@@ -58,7 +58,7 @@ if (typeof window.__WPT_INITIALIZED !== 'undefined') {
     SELECTION_SEARCH_TARGETS: [
       { key: 'google', label: 'Google' },
       { key: 'naver', label: 'Naver' },
-      { key: 'bing', label: 'Bing' },
+      { key: 'youtube', label: 'YouTube' },
       { key: 'chatgpt', label: 'ChatGPT' },
       { key: 'perplexity', label: 'Perplexity' },
       { key: 'all', label: '전체 검색' }

@@ -51,6 +51,14 @@ function readReadmeReleaseMetadata(filePath) {
   };
 }
 
+function hasChangelogReleaseEntry(filePath, version) {
+  const source = readFileSync(filePath, 'utf8');
+  const escapedVersion = version.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const headingPattern = new RegExp(`^##\\s+\\d{4}-\\d{2}-\\d{2}\\s+·\\s+v${escapedVersion}\\s*$`, 'm');
+
+  return headingPattern.test(source);
+}
+
 function getSeoulDateString() {
   return new Intl.DateTimeFormat('en-CA', {
     timeZone: 'Asia/Seoul',
@@ -73,6 +81,10 @@ function assertReleasePreconditions() {
 
   if (readme.version !== manifest.version) {
     throw new Error(`README.md 버전(${readme.version})과 manifest.json 버전(${manifest.version})이 다릅니다.`);
+  }
+
+  if (!hasChangelogReleaseEntry(join(ROOT_DIR, 'CHANGELOG.md'), manifest.version)) {
+    throw new Error(`CHANGELOG.md에 현재 버전(v${manifest.version}) 릴리즈 항목이 없습니다.`);
   }
 
   if (lastEdited !== today) {

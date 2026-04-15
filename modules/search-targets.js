@@ -1,7 +1,7 @@
 export const SEARCH_TARGETS = [
   { key: 'google', label: 'Google' },
   { key: 'naver', label: 'Naver' },
-  { key: 'bing', label: 'Bing' },
+  { key: 'youtube', label: 'YouTube' },
   { key: 'chatgpt', label: 'ChatGPT' },
   { key: 'perplexity', label: 'Perplexity' }
 ];
@@ -31,8 +31,8 @@ export function buildSearchUrl(engine, query) {
       return `https://www.google.com/search?q=${encodedQuery}`;
     case 'naver':
       return `https://search.naver.com/search.naver?query=${encodedQuery}`;
-    case 'bing':
-      return `https://www.bing.com/search?q=${encodedQuery}`;
+    case 'youtube':
+      return `https://www.youtube.com/results?search_query=${encodedQuery}`;
     case 'chatgpt':
       return `https://chat.openai.com/?q=${encodedQuery}`;
     case 'perplexity':

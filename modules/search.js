@@ -24,8 +24,8 @@ export function getNaverIcon() {
   return `<img class="search-engine-icon" alt="Naver" width="24" height="24" src="https://www.google.com/s2/favicons?sz=128&domain=naver.com" style="width: 20px; height: 20px;">`;
 }
 
-export function getBingIcon() {
-  return `<img class="search-engine-icon" alt="Bing" width="24" height="24" src="https://www.google.com/s2/favicons?sz=128&domain=bing.com" style="width: 20px; height: 20px;">`;
+export function getYouTubeIcon() {
+  return `<img class="search-engine-icon" alt="YouTube" width="24" height="24" src="https://www.google.com/s2/favicons?sz=128&domain=youtube.com" style="width: 20px; height: 20px;">`;
 }
 
 export function getChatGPTIcon() {
@@ -42,8 +42,8 @@ function getSearchTargetIcon(engine) {
       return getGoogleIcon();
     case 'naver':
       return getNaverIcon();
-    case 'bing':
-      return getBingIcon();
+    case 'youtube':
+      return getYouTubeIcon();
     case 'chatgpt':
       return getChatGPTIcon();
     case 'perplexity':

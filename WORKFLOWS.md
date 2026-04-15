@@ -46,11 +46,12 @@
 트리거: 버전업, 배포 직전 점검, 공유용 패키지 상태 확인
 
 절차:
-1. `manifest.json` 버전과 `meta.js` 날짜를 함께 확인합니다.
-2. `README.md`, `AGENTS.md`, `CHANGELOG.md` 반영 여부를 확인합니다.
-3. `README.md`의 `현재 버전 / 마지막 정리`가 실제 릴리즈 기준과 맞는지 확인합니다.
-4. `npm run release:pack`로 배포용 `release/` 폴더와 zip을 생성합니다.
-5. unpacked 확장을 다시 로드하고 열린 탭을 새로고침해야 하는지 점검합니다.
+1. 요청에 명시된 버전이 있으면 그 버전으로, 없으면 패치 버전으로 올립니다.
+2. `manifest.json`, `package.json`, `README.md`, `CHANGELOG.md`가 같은 버전을 가리키는지 확인합니다.
+3. `meta.js` 날짜와 `README.md`의 마지막 정리가 릴리즈 당일인지 확인합니다.
+4. `AGENTS.md`, `WORKFLOWS.md`, `VALIDATION.md` 반영 여부를 확인합니다.
+5. `npm run release:pack`로 배포용 `release/` 폴더와 zip을 생성합니다.
+6. unpacked 확장을 다시 로드하고 열린 탭을 새로고침해야 하는지 점검합니다.
 
 검증:
 - 필수: `npm run release:pack`
