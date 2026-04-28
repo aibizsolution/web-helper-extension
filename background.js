@@ -16,7 +16,12 @@ import {
   STORAGE_KEYS
 } from './modules/constants.js';
 import { CONTENT_SCRIPT_FILES, PANEL_SESSION_KEY } from './modules/panel-constants.js';
-import { getSearchTargetLabel, getSearchUrls } from './modules/search-targets.js';
+import {
+  getSearchTargetLabel,
+  getSearchUrls,
+  getSupportedSearchTargetKeys,
+  normalizeSearchEngine
+} from './modules/search-targets.js';
 
 const LEVEL_MAP = { DEBUG: 0, INFO: 1, WARN: 2, ERROR: 3 };
 let currentLogLevel = 'INFO';
@@ -333,13 +338,20 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   }
 
   if (request.action === ACTIONS.SEARCH_SELECTION) {
-    openSelectionSearchTabs(request.text || '', request.engine || 'google')
+    const requestedEngine = request.engine || 'google';
+    openSelectionSearchTabs(request.text || '', requestedEngine)
       .then((openedCount) => sendResponse({
         success: true,
         openedCount,
-        label: getSearchTargetLabel(request.engine || 'google')
+        label: getSearchTargetLabel(requestedEngine)
       }))
-      .catch((error) => sendResponse({ success: false, error: error.message }));
+      .catch((error) => {
+        logError('SELECTION_SEARCH_FAILED', '선택 텍스트 검색 열기 실패', {
+          engine: requestedEngine,
+          supportedEngines: getSupportedSearchTargetKeys()
+        }, error);
+        sendResponse({ success: false, error: error.message, engine: requestedEngine });
+      });
     return true;
   }
 
@@ -427,9 +439,11 @@ async function openSelectionSearchTabs(text, engine) {
     throw new Error('검색할 선택 텍스트가 없습니다.');
   }
 
-  const urls = getSearchUrls(engine, query);
+  const normalizedEngine = normalizeSearchEngine(engine);
+  const urls = getSearchUrls(normalizedEngine, query);
   if (!urls.length) {
-    throw new Error('지원하지 않는 검색 엔진입니다.');
+    const engineLabel = normalizedEngine || 'empty';
+    throw new Error(`지원하지 않는 검색 엔진입니다. 확장 프로그램을 다시 로드하고 페이지를 새로고침해 주세요. (engine: ${engineLabel})`);
   }
 
   for (const url of urls) {

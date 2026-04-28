@@ -1,6 +1,6 @@
 {
   "name": "web-helper-extension",
-  "version": "2.4.2",
+  "version": "2.4.3",
   "private": true,
   "description": "웹 도우미 Chrome extension development tooling",
   "type": "module",
